@@ -1,0 +1,3 @@
+aiogram
+py3DNS==3.2.1
+validate_email==1.3
