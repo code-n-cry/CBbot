@@ -15,7 +15,7 @@ def send_message(email, msg_text):
     message['Subject'] = 'Подтвердите ваш адрес электронной почты'
     message.attach(text.MIMEText(msg_text, 'plain'))
     sender = smtplib.SMTP_SSL('smtp.yandex.ru', 465)
-    sender.login("", "")
+    sender.login("cbot.telegramm@yandex.ru", "aaaaaaa1N!")
     sender.send_message(message)
     sender.quit()
 
