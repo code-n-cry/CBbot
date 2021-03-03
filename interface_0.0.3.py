@@ -36,8 +36,9 @@ async def process_help_command(message):
 
 @dp.message_handler(commands=['create'])
 async def process_create_command(message):
-    all_ids = [i[0] for i in accounts_db.select('accounts', 'id')]
-    if message.from_user.id in all_ids:
+    is_user_in_db = list(
+        filter(lambda user: user[0] == message.from_user.id, accounts_db.select('accounts', 'id')))
+    if is_user_in_db:
         await bot.send_message(message.from_user.id, phrases.already_registered)
     else:
         await bot.send_message(message.from_user.id, '\n'.join(phrases.creating_msg))
@@ -45,8 +46,9 @@ async def process_create_command(message):
 
 @dp.message_handler(commands=['email'])
 async def processing_email(message):
-    all_ids = [i[0] for i in accounts_db.select('accounts', 'id')]
-    if message.from_user.id not in all_ids:
+    is_user_in_db = list(
+        filter(lambda user: user[0] == message.from_user.id, accounts_db.select('accounts', 'id')))
+    if is_user_in_db:
         try:
             mail = message.text.split(' ')[1]
             code = checking_email.verify_email(mail)
@@ -65,8 +67,9 @@ async def processing_email(message):
 
 @dp.message_handler(commands=['account'])
 async def process_account_command(message):
-    all_ids = [i[0] for i in accounts_db.select('accounts', 'id')]
-    if message.from_user.id in all_ids:
+    is_user_in_db = list(
+        filter(lambda user: user[0] == message.from_user.id, accounts_db.select('accounts', 'id')))
+    if is_user_in_db:
         email = accounts_db.select_where('accounts', f'id={message.from_user.id}', 'email')[0][0]
         await bot.send_message(message.from_user.id, phrases.account_info(email))
     else:
@@ -75,23 +78,24 @@ async def process_account_command(message):
 
 @dp.message_handler(commands=['code'])
 async def verifying_email(message):
-    all_ids = [i[0] for i in accounts_db.select('accounts', 'id')]
-    if message.from_user.id in all_ids:
+    if list(filter(lambda user: user[0] == message.from_user.id,
+                   accounts_db.select('accounts', 'id'))):
         try:
-            all_code_ids = [i[0] for i in codes_db.select('main', 'id')]
-            if message.from_user.id in all_code_ids:
+            if list(filter(lambda id: id[0] == message.from_user.id, codes_db.select('main', 'db'))):
                 code = message.text.split(' ')[1]
-                right_code = str(codes_db.select_where('main', f'id={message.from_user.id}', 'code')[-1][0])
+                right_code = str(
+                    codes_db.select_where('main', f'id={message.from_user.id}', 'code')[-1][0])
                 if code == right_code:
-                    email = codes_db.select_where('main', f'id={message.from_user.id}', 'email')[-1][0]
+                    email = codes_db.select_where('main', f'id={message.from_user.id}', 'email')[-1][
+                        0]
                     accounts_db.insert('accounts', ['id', 'email'],
-                               [str(message.from_user.id), f'"{email}"'])
+                                       [str(message.from_user.id), f'"{email}"'])
                     await bot.send_message(message.from_user.id, '\n'.join(phrases.code_success))
                     codes_db.delete_where('main', f'id={str(message.from_user.id)}')
                 else:
                     await bot.send_message(message.from_user.id, phrases.invalid_code)
             else:
-                await bot.send_message(message.from_user.id,phrases.mail_not_specified)
+                await bot.send_message(message.from_user.id, phrases.mail_not_specified)
         except IndexError:
             await bot.send_message(message.from_user.id, phrases.no_code)
     else:
