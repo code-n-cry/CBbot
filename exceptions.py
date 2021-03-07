@@ -1,0 +1,2 @@
+class EmailDoesNotExists(Exception):
+    pass
