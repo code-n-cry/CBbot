@@ -33,6 +33,7 @@ creating_msg = ['Вы решили создать аккаунт? Отлично
                 'И обещаем: никаких рассылок!']
 available_crypto = ['Bitcoin', 'Litecoin', 'Ethereum', 'Dogecoin']
 available_fiat = ['рубль', 'доллар сша', 'евро']
+available_periods = ['Неделя', 'Месяц', 'Год', 'Пять лет']
 fiats_for_buttons = ['Рубль', 'Доллар США', 'Евро']
 cryptos_abbreviations = {
     'Bitcoin': 'BTC',

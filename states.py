@@ -9,3 +9,9 @@ class GetPrice(StatesGroup):
 class GetEmail(StatesGroup):
     waiting_for_email = State()
     waiting_for_code = State()
+
+
+class BuildGraph(StatesGroup):
+    waiting_for_crypto = State()
+    waiting_for_fiat = State()
+    waiting_for_period = State()

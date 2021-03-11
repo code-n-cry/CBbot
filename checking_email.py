@@ -8,7 +8,7 @@ import random
 
 def send_message(email, msg_text):
     message = multipart.MIMEMultipart()
-    message['From'] = "cbbot.telegram@mail.ru"
+    message['From'] = ""
     message['To'] = email
     phrase = [f'Авторизация в CBbot']
     message['Subject'] = '\n'.join(phrase)

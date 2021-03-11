@@ -1,7 +1,7 @@
 from aiogram.types import ReplyKeyboardRemove, \
     ReplyKeyboardMarkup, KeyboardButton, \
     InlineKeyboardMarkup, InlineKeyboardButton
-from phrases import available_crypto, fiats_for_buttons
+from phrases import available_crypto, fiats_for_buttons, available_periods
 
 
 button_help = InlineKeyboardButton('Вызвать помощь', callback_data='help')
@@ -28,6 +28,11 @@ fiat_kb = ReplyKeyboardMarkup(resize_keyboard=True)
 for currency in fiats_for_buttons:
     button = KeyboardButton(currency)
     fiat_kb.add(button)
+
+periods_kb = ReplyKeyboardMarkup(resize_keyboard=True)
+for period in available_periods:
+    button = KeyboardButton(period)
+    periods_kb.row(button)
 
 email_btn = KeyboardButton('Привязать почту📩')
 email_kb = ReplyKeyboardMarkup(resize_keyboard=True).add(email_btn)
