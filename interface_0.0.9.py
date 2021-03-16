@@ -12,7 +12,9 @@ import keyboards
 import os
 import phrases
 
+print('DB initialization.....')
 db_session.initialization('db/all_data.sqlite')
+print('Bot starting...')
 bot = Bot(token='')
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
@@ -201,16 +203,13 @@ async def start_graph_command(message):
     await BuildGraph.waiting_for_crypto.set()
     await bot.send_message(message.from_user.id, 'Выберите валюту из предложенных',
                            reply_markup=keyboard)
-    print(BuildGraph)
 
 
 async def crypto_for_graph_chosen(message, state):
-    print('a')
     if message.text.capitalize() not in phrases.available_crypto:
         await bot.send_message(message.from_user.id, 'Пожалуйста, выбирайте из предложенных валют')
         return
     chosen_crypto_code = phrases.cryptos_abbreviations[message.text.capitalize()]
-    print(chosen_crypto_code)
     await bot.send_message(message.from_user.id, 'К какой валюте привести?',
                            reply_markup=keyboards.fiat_kb)
     await state.update_data(chosen_crypto=chosen_crypto_code)
@@ -230,6 +229,7 @@ async def fiat_for_graph_chosen(message, state):
 
 
 async def period_for_graph_chosen(message, state):
+    session = db_session.create_session()
     if message.text.capitalize() not in phrases.available_periods:
         await bot.send_message(message.from_user.id,
                                'Пожалуйста, выбирайте из предложенных периодов')
@@ -240,8 +240,14 @@ async def period_for_graph_chosen(message, state):
                          chosen_period)
     await types.ChatActions.upload_photo()
     media = types.MediaGroup()
-    media.attach_photo(types.InputFile('static/img/plot.png'), 'Ваша диаграмма!')
+    media.attach_photo(types.InputFile('static/img/plot.png'))
     await message.reply_media_group(media=media)
+    reply_markup = keyboards.main_kb
+    is_user_in_db = [user for user in
+                     session.query(User).filter(User.id == message.from_user.id)]
+    if not is_user_in_db:
+        reply_markup = keyboards.newbie_kb
+    await bot.send_message(message.from_user.id, 'Ваша диаграмма!',  reply_markup=reply_markup)
     os.remove('static/img/plot.png')
     await state.finish()
 
@@ -285,4 +291,5 @@ if __name__ == '__main__':
     register_handlers_price(dp)
     register_mail_handlers(dp)
     register_graph_handlers(dp)
+    print('bot running')
     executor.start_polling(dp)
