@@ -1,5 +1,5 @@
 import moneywagon
-import math_operations
+from math_operations import MathOperations
 from states import GetPrice, GetEmail, BuildGraph
 from aiogram import Dispatcher, Bot, types, executor
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
@@ -9,6 +9,7 @@ from data import db_session
 from data.verification import IsVerifying
 from data.user import User
 import keyboards
+import time
 import os
 import phrases
 
@@ -236,11 +237,22 @@ async def period_for_graph_chosen(message, state):
         return
     chosen_period = message.text.capitalize()
     crypto_and_fiat = await state.get_data()
-    math_operations.main(crypto_and_fiat['chosen_crypto'], crypto_and_fiat['chosen_fiat'],
-                         chosen_period)
+    filename = 'static/img/'
+    all_pngs = []
+    for file_name in os.listdir(filename):
+        if file_name.endswith('.png'):
+            all_pngs.append(file_name.split('.png')[0])
+    if all_pngs:
+        last_num = int(all_pngs[-1][-1])
+        filename += f'plot{last_num + 1}'
+    else:
+        filename = f'plot{0}'
+    build_me_plot = MathOperations(chosen_period, crypto_and_fiat['chosen_crypto'],
+                                   crypto_and_fiat['chosen_fiat'], filename)
+    build_me_plot.main()
     await types.ChatActions.upload_photo()
     media = types.MediaGroup()
-    media.attach_photo(types.InputFile('static/img/plot.png'))
+    media.attach_photo(types.InputFile(filename + '.png'))
     await message.reply_media_group(media=media)
     reply_markup = keyboards.main_kb
     is_user_in_db = [user for user in
@@ -248,7 +260,7 @@ async def period_for_graph_chosen(message, state):
     if not is_user_in_db:
         reply_markup = keyboards.newbie_kb
     await bot.send_message(message.from_user.id, 'Ваша диаграмма!',  reply_markup=reply_markup)
-    os.remove('static/img/plot.png')
+    os.remove(filename + '.png')
     await state.finish()
 
 
