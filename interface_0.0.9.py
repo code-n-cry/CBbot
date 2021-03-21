@@ -1,5 +1,5 @@
 import moneywagon
-import math_operations
+from math_operations import MathOperations
 from states import GetPrice, GetEmail, BuildGraph
 from aiogram import Dispatcher, Bot, types, executor
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
@@ -46,6 +46,7 @@ async def process_help_command(message):
     reply_markup = keyboards.main_kb
     session = db_session.create_session()
     is_user_in_db = [user for user in session.query(User).filter(User.id == message.from_user.id)]
+    await types.ChatActions.typing()
     if not is_user_in_db:
         reply_markup = keyboards.newbie_kb
     await bot.send_message(message.from_user.id, '\n'.join(phrases.help_message),
@@ -56,6 +57,7 @@ async def process_help_command(message):
 async def process_create_command(message):
     db_sess = db_session.create_session()
     is_user_in_db = [user for user in db_sess.query(User).filter(User.id == message.from_user.id)]
+    await types.ChatActions.typing()
     if is_user_in_db:
         await bot.send_message(message.from_user.id, phrases.already_registered)
     else:
@@ -67,6 +69,7 @@ async def process_create_command(message):
 async def process_account_command(message):
     db_sess = db_session.create_session()
     is_user_in_db = [user for user in db_sess.query(User).filter(User.id == message.from_user.id)]
+    await types.ChatActions.typing()
     if is_user_in_db:
         btc_wallet = [user.bitcoin_wallet for user in
                       db_sess.query(User).filter(User.id == message.from_user.id)][0]
@@ -86,6 +89,7 @@ async def process_account_command(message):
 async def start_email_command(message):
     db_sess = db_session.create_session()
     is_user_in_db = [user for user in db_sess.query(User).filter(User.id == message.from_user.id)]
+    await types.ChatActions.typing()
     if not is_user_in_db:
         await bot.send_message(message.from_user.id, phrases.send_me_email)
         await GetEmail.waiting_for_email.set()
@@ -107,16 +111,20 @@ async def email_sent(message, state):
             session.add(data)
             session.commit()
             await state.update_data(email=mail)
+            await types.ChatActions.typing()
             await bot.send_message(message.from_user.id, phrases.code_sent, reply_markup=None)
             await bot.send_message(message.from_user.id, phrases.send_code_next, reply_markup=None)
             await GetEmail.next()
         else:
+            await types.ChatActions.typing()
             await bot.send_message(message.from_user.id, phrases.this_email_used)
     except EmailDoesNotExists:
+        await types.ChatActions.typing()
         await bot.send_message(message.from_user.id, phrases.invalid_email,
                                reply_markup=keyboards.newbie_kb)
         state.finish()
     except SMTPRecipientsRefused:
+        await types.ChatActions.typing()
         await bot.send_message(message.from_user.id, phrases.invalid_email,
                                reply_markup=keyboards.newbie_kb)
         state.finish()
@@ -137,6 +145,7 @@ async def code_sent(message, state):
                 new_user.email = email['email']
                 session.add(new_user)
                 session.commit()
+                await types.ChatActions.typing()
                 await bot.send_message(message.from_user.id, '\n'.join(phrases.code_success),
                                        reply_markup=keyboards.main_kb)
                 session.query(IsVerifying).filter(
@@ -144,14 +153,17 @@ async def code_sent(message, state):
                 session.commit()
                 await state.finish()
             else:
+                await types.ChatActions.typing()
                 await bot.send_message(message.from_user.id, phrases.invalid_code,
                                        reply_markup=keyboards.newbie_kb)
                 state.finish()
         else:
+            await types.ChatActions.typing()
             await bot.send_message(message.from_user.id, phrases.mail_not_specified,
                                    reply_markup=keyboards.newbie_kb)
             state.finish()
     except ValueError:
+        await types.ChatActions.typing()
         await bot.send_message(message.from_user.id, phrases.invalid_code,
                                reply_markup=keyboards.newbie_kb)
         state.finish()
@@ -159,6 +171,7 @@ async def code_sent(message, state):
 
 @dp.message_handler(commands=['price', 'курс'])
 async def start_price_command(message):
+    await types.ChatActions.typing()
     keyboard = keyboards.cryptos_kb
     await bot.send_message(message.from_user.id, 'Выберите валюту из предложенных',
                            reply_markup=keyboard)
@@ -166,6 +179,7 @@ async def start_price_command(message):
 
 
 async def crypto_chosen(message, state):
+    await types.ChatActions.typing()
     if message.text.capitalize() not in phrases.available_crypto:
         await bot.send_message(message.from_user.id, 'Пожалуйста, выбирайте из предложенных валют')
         return
@@ -177,6 +191,7 @@ async def crypto_chosen(message, state):
 
 async def fiat_chosen(message, state):
     if message.text.lower() not in phrases.available_fiat:
+        await types.ChatActions.typing()
         await bot.send_message(message.from_user.id, 'Пожалуйста, выбирайте из предложенных валют')
         return
     chosen_crypto = await state.get_data()
@@ -190,6 +205,7 @@ async def fiat_chosen(message, state):
     is_user_in_db = [user for user in session.query(User).filter(User.id == message.from_user.id)]
     if not is_user_in_db:
         reply_markup = keyboards.newbie_kb
+    await types.ChatActions.typing()
     await bot.send_message(message.from_user.id,
                            phrases.price_info(chosen_crypto['chosen_crypto'], fiat_to_genitive,
                                               price, chosen_fiat_code),
@@ -201,15 +217,18 @@ async def fiat_chosen(message, state):
 async def start_graph_command(message):
     keyboard = keyboards.cryptos_kb
     await BuildGraph.waiting_for_crypto.set()
+    await types.ChatActions.typing()
     await bot.send_message(message.from_user.id, 'Выберите валюту из предложенных',
                            reply_markup=keyboard)
 
 
 async def crypto_for_graph_chosen(message, state):
     if message.text.capitalize() not in phrases.available_crypto:
+        await types.ChatActions.typing()
         await bot.send_message(message.from_user.id, 'Пожалуйста, выбирайте из предложенных валют')
         return
     chosen_crypto_code = phrases.cryptos_abbreviations[message.text.capitalize()]
+    await types.ChatActions.typing()
     await bot.send_message(message.from_user.id, 'К какой валюте привести?',
                            reply_markup=keyboards.fiat_kb)
     await state.update_data(chosen_crypto=chosen_crypto_code)
@@ -218,9 +237,11 @@ async def crypto_for_graph_chosen(message, state):
 
 async def fiat_for_graph_chosen(message, state):
     if message.text.lower() not in phrases.available_fiat:
+        await types.ChatActions.typing()
         await bot.send_message(message.from_user.id, 'Пожалуйста, выбирайте из предложенных валют')
         return
     chosen_fiat_code = phrases.fiats_abbreviations[message.text.lower()]
+    await types.ChatActions.typing()
     await bot.send_message(message.from_user.id,
                            'Отлично! Теперь выберите период, за который отобразить цену',
                            reply_markup=keyboards.periods_kb)
@@ -231,16 +252,28 @@ async def fiat_for_graph_chosen(message, state):
 async def period_for_graph_chosen(message, state):
     session = db_session.create_session()
     if message.text.capitalize() not in phrases.available_periods:
+        await types.ChatActions.typing()
         await bot.send_message(message.from_user.id,
                                'Пожалуйста, выбирайте из предложенных периодов')
         return
     chosen_period = message.text.capitalize()
     crypto_and_fiat = await state.get_data()
-    math_operations.main(crypto_and_fiat['chosen_crypto'], crypto_and_fiat['chosen_fiat'],
-                         chosen_period)
+    filename = 'static/img/'
+    all_pngs = []
+    for file_name in os.listdir(filename):
+        if file_name.endswith('.png'):
+            all_pngs.append(file_name.split('.png')[0])
+    if all_pngs:
+        last_num = int(all_pngs[-1][-1])
+        filename += f'plot{last_num + 1}'
+    else:
+        filename = f'plot{0}'
+    build_me_plot = MathOperations(chosen_period, crypto_and_fiat['chosen_crypto'],
+                                   crypto_and_fiat['chosen_fiat'], filename)
+    build_me_plot.main()
     await types.ChatActions.upload_photo()
     media = types.MediaGroup()
-    media.attach_photo(types.InputFile('static/img/plot.png'))
+    media.attach_photo(types.InputFile(filename + '.png'))
     await message.reply_media_group(media=media)
     reply_markup = keyboards.main_kb
     is_user_in_db = [user for user in
@@ -248,7 +281,7 @@ async def period_for_graph_chosen(message, state):
     if not is_user_in_db:
         reply_markup = keyboards.newbie_kb
     await bot.send_message(message.from_user.id, 'Ваша диаграмма!',  reply_markup=reply_markup)
-    os.remove('static/img/plot.png')
+    os.remove(filename + '.png')
     await state.finish()
 
 
@@ -291,5 +324,5 @@ if __name__ == '__main__':
     register_handlers_price(dp)
     register_mail_handlers(dp)
     register_graph_handlers(dp)
-    print('bot running')
+    print('Bot is running now')
     executor.start_polling(dp)
