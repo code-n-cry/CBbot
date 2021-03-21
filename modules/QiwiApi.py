@@ -4,15 +4,14 @@ import datetime
 
 
 class Qiwi:
-    def __init__(self, token, secret_key, phone):
+    def __init__(self, token, phone):
         """
         Основной класс для взаимодействия с кошельком
         token - токен кошелька
         secret_key - secret key p2p транзакций
-        phone - номер телефона
+        phone - номер телефона (71234567890)
         """
         self.phone = phone
-        self.secret_key = secret_key
         self.token = token
         self.ses = requests.Session()
         self.ses.headers['Accept'] = 'application/json'
@@ -50,14 +49,11 @@ class Qiwi:
                          params=params)
         return r.json()
 
-    def create_bill(self, rub=0, cur='RUB', comment=None):
-        """Пока не работает"""
-        time = datetime.datetime.now() + datetime.timedelta(minutes=10)
-        self.ses.headers['Authorization'] = 'Bearer ' + self.secret_key
-        params = {'amount': {"currency": cur, "value": rub},
-                  "expirationDateTime": time.strftime('%Y-%m-%dT%H:%M:%S+03:00')}
-        if comment:
-            params['comment'] = comment
-        r = self.ses.put(f'https://api.qiwi.com/partner/bill/v1/bills/{random.getrandbits(2)}',
-                         data=params)
-        print(r)
+    def create_bill(self, rub=0, kop=0, cur=643):
+        """Генерация ссылки для оплаты"""
+        nickname = self.ses.get(f'https://edge.qiwi.com/qw-nicknames/v1/persons/{self.phone}/'
+                                f'nickname').json()['nickname']
+        link = f"https://qiwi.com/payment/form/99999?extra['account']={nickname}&amountInteger=" \
+               f"{rub}&amountFraction={kop}&currency={cur}&blocked[0]=account&blocked[1]=" \
+               f"sum&blocked[2]=comment&account&extra['accountType']=nickname "
+        return link
