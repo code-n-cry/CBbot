@@ -11,13 +11,12 @@ class MathOperations:
     def __init__(self, period: str, crypto: str, fiat: str, plot_img_name: str):
         self.morph = pymorphy2.MorphAnalyzer()
         self.converter = CurrencyConverter()
-        with open('data/month_names.json', encoding='utf-8') as json_names:
+        with open('static/json/month_names.json', encoding='utf-8') as json_names:
             self.month_names = json.load(json_names)['Months']
         self.date_lst = []
         self.period = period
         self.crypto = crypto
         self.fiat = fiat
-
         self.img_name = plot_img_name
 
     def str_periods_to_machine(self):
@@ -101,6 +100,7 @@ class MathOperations:
         price_lst = []
         year_changed = False
         first_date_year = self.date_lst[0].split('-')[-1]
+        print(self.date_lst)
         for date in self.date_lst:
             scraper = CmcScraper(self.crypto, date, date)
             price_lst.append(scraper.get_data()[1][0][1])
@@ -192,3 +192,10 @@ class MathOperations:
         name_y = f'Курс {self.crypto} к {self.fiat}'
         title = f'Изменения цены {self.crypto} к {self.fiat} за {self.period.lower()}'
         self.build_plot(x, y, name_x, name_y, title, font_size)
+        self.date_lst.clear()
+
+    def set_new_data(self, period: str, crypto: str, fiat: str, plot_img_name: str):
+        self.period = period
+        self.crypto = crypto
+        self.fiat = fiat
+        self.img_name = plot_img_name

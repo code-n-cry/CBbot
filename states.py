@@ -15,3 +15,9 @@ class BuildGraph(StatesGroup):
     waiting_for_crypto = State()
     waiting_for_fiat = State()
     waiting_for_period = State()
+
+
+class BuyingState(StatesGroup):
+    waiting_for_number = State()
+    waiting_for_crypto = State()
+    waiting_for_amount = State()
