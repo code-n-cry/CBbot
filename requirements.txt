@@ -10,3 +10,6 @@ pysendpulse~=0.1.2
 matplotlib==3.3.4
 cryptocmd~=0.6.0
 pymorphy2~=0.9.1
+blockcypher~=1.0.91
+cryptos~=1.36
+requests~=2.11.1

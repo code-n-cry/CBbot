@@ -1,12 +1,13 @@
 {
   "Wallets":  {
-    "Dogecoin": "DLF1WU9GBQ1CLisrwsePjUntFGgBGS2FR7",
-    "Bitcoin": "",
-    "Litecoin": "",
-    "Ethereum": ""
+    "DOGE": "DLF1WU9GBQ1CLisrwsePjUntFGgBGS2FR7",
+    "BTC": "",
+    "LTC": "",
+    "ETH": ""
   },
   "Tokens": {
     "BlockCypher": "",
-    "Qiwi": ""
+    "Qiwi": "",
+    "Tg_Token": ""
   }
 }

@@ -1,8 +1,8 @@
-import moneywagon
 from math_operations import MathOperations
 from modules.payment_operations import PaymentOperations
 from states import GetPrice, GetEmail, BuildGraph, BuyingState
 from aiogram import Dispatcher, Bot, types, executor
+from aiogram.types import ReplyKeyboardRemove
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from checking_email import EmailDoesNotExists, verify_email
 from checking_phone import checking_phone, WrongPhoneLength, PhoneNotRussian, SomeTextInThePhone
@@ -12,6 +12,8 @@ from data.verification import IsVerifying
 from data.user import User
 import keyboards
 import os
+import moneywagon
+import requests
 import json
 import phrases
 
@@ -24,16 +26,17 @@ with open('static/json/phrases.json', encoding='utf-8') as phrases_json:
 with open('static/json/general_wallets.json', encoding='utf-8') as tokens:
     all_data = json.load(tokens)
     qiwi_token = all_data['Tokens']['Qiwi']
-    dogecoin_wallet = all_data['Wallets']['Dogecoin']
+    token = all_data['Tokens']['Tg_Token']
+    dogecoin_wallet = all_data['Wallets']['DOGE']
 with open('static/json/crypto_fees.json', encoding='utf-8') as fees:
     all_data = json.load(fees)
     crypto_fees = all_data['Fees']
 print('Bot starting...')
-bot = Bot(token='')
+bot = Bot(token=token)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 plot_builder = MathOperations('', '', '', '')
-qiwi_links_generator = PaymentOperations(qiwi_token, '')
+qiwi_links_generator = PaymentOperations(qiwi_token, '79254461928')
 
 
 @dp.message_handler(commands=['start'])
@@ -128,9 +131,9 @@ async def email_sent(message, state):
             session.commit()
             await state.update_data(email=mail)
             await types.ChatActions.typing()
-            await bot.send_message(message.from_user.id, str_phrases['code_sent'], reply_markup=None)
-            await bot.send_message(message.from_user.id, str_phrases['send_code_next'],
-                                   reply_markup=None)
+            await bot.send_message(message.from_user.id, str_phrases['code_sent'],
+                                   reply_markup=ReplyKeyboardRemove())
+            await bot.send_message(message.from_user.id, str_phrases['send_code_next'], )
             await GetEmail.next()
         else:
             await types.ChatActions.typing()
@@ -305,7 +308,8 @@ async def period_for_graph_chosen(message, state):
 async def start_buying_command(message: types.message):
     await types.ChatActions.typing()
     await BuyingState.waiting_for_number.set()
-    await bot.send_message(message.from_user.id, '\n'.join(list_phrases['start_buying']))
+    await bot.send_message(message.from_user.id, '\n'.join(list_phrases['start_buying']),
+                           reply_markup=ReplyKeyboardRemove())
 
 
 async def phone_sent(message: types.message, state):
@@ -334,24 +338,42 @@ async def crypto_for_buy_chosen(message: types.message, state):
         return
     await types.ChatActions.typing()
     await state.update_data(chosen_crypto=chosen_crypto)
-    await bot.send_message(message.from_user.id, 'Теперь напишите количество, необходимое вам:', reply_markup=None)
+    await bot.send_message(message.from_user.id, 'Теперь напишите количество, необходимое вам:',
+                           reply_markup=ReplyKeyboardRemove())
     await BuyingState.waiting_for_amount.set()
 
 
 async def amount_for_buy_chosen(message: types.message, state):
+    """"""
+
     try:
         chosen_amount = float(message.text)
         # todo: написать хрень которая чекает по балансу наш банк по выбранной криптовалюте.
         state_data = await state.get_data()
         chosen_crypto = state_data['chosen_crypto']
         phone = state_data['phone']
-        print(f'Покупка {chosen_amount} {chosen_crypto} на номер {phone}')
         rub_price = moneywagon.get_current_price(phrases.cryptos_abbreviations[chosen_crypto], 'RUB')
-        rub_and_cop = round(rub_price, 2) * (chosen_amount + crypto_fees[chosen_crypto])
-        print(rub_and_cop)
-        link = qiwi_links_generator.create_bill(int(str(rub_and_cop).split('.')[0]),
-                                                int(str(rub_and_cop).split('.')[1]))
-        print(link)
+        rub_and_cop = round(round(rub_price, 2) * (chosen_amount + crypto_fees[chosen_crypto]), 2)
+        link = None
+        if not rub_and_cop.is_integer():
+            link = qiwi_links_generator.create_bill(int(str(rub_and_cop).split('.')[0]),
+                                                    int(str(rub_and_cop).split('.')[1]))
+        else:
+            link = qiwi_links_generator.create_bill(rub_and_cop, 0)
+        headers = {
+            'Authorization': 'Bearer ',
+            "Content-Type": "application/json"
+        }
+        json_params = {
+            'long_url': link
+
+        }
+        response = requests.post('https://api-ssl.bitly.com/v4/shorten', headers=headers,
+                                 json=json_params).json()
+        link = response['link']
+        await types.ChatActions.typing()
+        msg = f'Отлично, вы можете купить это количество {phrases.cryptos_abbreviations[chosen_crypto]}. Совершите перевод по {link} и нажмите на кнопку внизу, чтобы подтвердить перевод'
+        await bot.send_message(message.from_user.id, msg, reply_markup=keyboards.payment_button)
     except ValueError:
         await types.ChatActions.typing(2)
         await bot.send_message(message.from_user.id, 'Вы должны написать число(без букв).')
