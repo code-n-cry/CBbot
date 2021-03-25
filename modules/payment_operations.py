@@ -53,9 +53,17 @@ class PaymentOperations:
 
     def create_bill(self, rub=0, kop=0, cur=643):
         """Генерация ссылки для оплаты"""
-        nickname = self.ses.get(f'https://edge.qiwi.com/qw-nicknames/v1/persons/{self.phone}/nickname').json()['nickname']
+        nickname = \
+        self.ses.get(f'https://edge.qiwi.com/qw-nicknames/v1/persons/{self.phone}/nickname').json()[
+            'nickname']
 
-        link = f"https://qiwi.com/payment/form/99999?extra['account']={nickname}&amountInteger=" +\
-               f"{rub}&amountFraction={kop}&currency={cur}&blocked[0]=account&blocked[1]=" +\
+        link = f"https://qiwi.com/payment/form/99999?extra['account']={nickname}&amountInteger=" + \
+               f"{rub}&amountFraction={kop}&currency={cur}&blocked[0]=account&blocked[1]=" + \
                f"sum&blocked[2]=comment&account&extra['accountType']=nickname "
         return link
+
+    def generate_payment_code(self):
+        first_code_part = random.randint(100, 999)
+        second_code_part = random.randint(1000000, 9999999)
+        all_code = f'{first_code_part}-{second_code_part}'
+        return all_code

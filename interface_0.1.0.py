@@ -1,15 +1,16 @@
 from math_operations import MathOperations
 from modules.payment_operations import PaymentOperations
+from modules.crypto_operations import CryptoOperating
 from states import GetPrice, GetEmail, BuildGraph, BuyingState
 from aiogram import Dispatcher, Bot, types, executor
 from aiogram.types import ReplyKeyboardRemove
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from checking_email import EmailDoesNotExists, verify_email
-from checking_phone import checking_phone, WrongPhoneLength, PhoneNotRussian, SomeTextInThePhone
 from smtplib import SMTPRecipientsRefused
 from data import db_session
 from data.verification import IsVerifying
 from data.user import User
+from data.waiting_for_money import IsPaying
 import keyboards
 import os
 import moneywagon
@@ -36,7 +37,9 @@ bot = Bot(token=token)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 plot_builder = MathOperations('', '', '', '')
-qiwi_links_generator = PaymentOperations(qiwi_token, '79254461928')
+crypto_operations = CryptoOperating()
+qiwi_links_generator = PaymentOperations(qiwi_token, '')
+is_paying = False
 
 
 @dp.message_handler(commands=['start'])
@@ -47,7 +50,7 @@ async def process_start_command(message):
 
 
 @dp.callback_query_handler(lambda call: True)
-async def process_callback_help_button(call):
+async def process_callback_help_button(call: types.callback_query):
     if call.data == 'help':
         reply_markup = keyboards.main_kb
         session = db_session.create_session()
@@ -58,6 +61,16 @@ async def process_callback_help_button(call):
         await bot.answer_callback_query(call.id)
         await bot.send_message(call.from_user.id, '\n'.join(list_phrases['help_message']),
                                reply_markup=reply_markup)
+
+
+@dp.callback_query_handler(lambda call: True)
+async def process_payed_button(call: types.callback_query):
+    if call.data == 'did':
+        reply_markup = keyboards.main_kb
+        session = db_session.create_session()
+        need_code = session.query(IsPaying.id == call.from_user.id).last()
+        payment_history = qiwi_links_generator.get_all_history()
+        # todo: дописать вот это надо
 
 
 @dp.message_handler(commands=['помощь', 'help'])
@@ -307,27 +320,9 @@ async def period_for_graph_chosen(message, state):
 @dp.message_handler(commands=['buy', 'купить'])
 async def start_buying_command(message: types.message):
     await types.ChatActions.typing()
-    await BuyingState.waiting_for_number.set()
+    await BuyingState.waiting_for_crypto.set()
     await bot.send_message(message.from_user.id, '\n'.join(list_phrases['start_buying']),
                            reply_markup=ReplyKeyboardRemove())
-
-
-async def phone_sent(message: types.message, state):
-    await types.ChatActions.typing()
-    try:
-        phone = message.text
-        checking_phone(phone)
-        await state.update_data(phone=phone)
-        await bot.send_message(message.from_user.id, str_phrases['correct_number'],
-                               reply_markup=keyboards.cryptos_kb)
-        await BuyingState.waiting_for_crypto.set()
-    except WrongPhoneLength:
-        await bot.send_message(message.from_user.id, str_phrases['not_full_phone'])
-    except PhoneNotRussian:
-        await bot.send_message(message.from_user.id, str_phrases['phone_not_russian'])
-        await state.finish()
-    except SomeTextInThePhone:
-        await bot.send_message(message.from_user.id, str_phrases['not_only_digits'])
 
 
 async def crypto_for_buy_chosen(message: types.message, state):
@@ -345,38 +340,54 @@ async def crypto_for_buy_chosen(message: types.message, state):
 
 async def amount_for_buy_chosen(message: types.message, state):
     """"""
-
     try:
         chosen_amount = float(message.text)
-        # todo: написать хрень которая чекает по балансу наш банк по выбранной криптовалюте.
-        state_data = await state.get_data()
-        chosen_crypto = state_data['chosen_crypto']
-        phone = state_data['phone']
-        rub_price = moneywagon.get_current_price(phrases.cryptos_abbreviations[chosen_crypto], 'RUB')
-        rub_and_cop = round(round(rub_price, 2) * (chosen_amount + crypto_fees[chosen_crypto]), 2)
-        link = None
-        if not rub_and_cop.is_integer():
-            link = qiwi_links_generator.create_bill(int(str(rub_and_cop).split('.')[0]),
-                                                    int(str(rub_and_cop).split('.')[1]))
-        else:
-            link = qiwi_links_generator.create_bill(rub_and_cop, 0)
-        headers = {
-            'Authorization': 'Bearer ',
-            "Content-Type": "application/json"
-        }
-        json_params = {
-            'long_url': link
-
-        }
-        response = requests.post('https://api-ssl.bitly.com/v4/shorten', headers=headers,
-                                 json=json_params).json()
-        link = response['link']
-        await types.ChatActions.typing()
-        msg = f'Отлично, вы можете купить это количество {phrases.cryptos_abbreviations[chosen_crypto]}. Совершите перевод по {link} и нажмите на кнопку внизу, чтобы подтвердить перевод'
-        await bot.send_message(message.from_user.id, msg, reply_markup=keyboards.payment_button)
+        await state.update_data(chosen_amount=chosen_amount)
+        await BuyingState.code_generate.set()
     except ValueError:
         await types.ChatActions.typing(2)
-        await bot.send_message(message.from_user.id, 'Вы должны написать число(без букв).')
+        await bot.send_message(message.from_user.id, str_phrases.just_number)
+
+
+async def generating_code(message: types.message, state):
+    global is_paying
+    session = db_session.create_session()
+    state_data = await state.get_data()
+    chosen_crypto = state_data['chosen_crypto']
+    chosen_amount = float(state_data['chosen_amount'])
+    our_amount = crypto_operations.get_balance(phrases.cryptos_abbreviations[chosen_crypto])
+    if our_amount <= chosen_amount:
+        await bot.send_message(message.from_user.id, str_phrases.so_poor)
+        await state.finish()
+        return
+    rub_price = moneywagon.get_current_price(phrases.cryptos_abbreviations[chosen_crypto], 'RUB')
+    rub_and_cop = round(round(rub_price, 2) * (chosen_amount + crypto_fees[chosen_crypto]), 2)
+    if not rub_and_cop.is_integer():
+        link = qiwi_links_generator.create_bill(int(str(rub_and_cop).split('.')[0]),
+                                                int(str(rub_and_cop).split('.')[1]))
+    else:
+        link = qiwi_links_generator.create_bill(rub_and_cop, 0)
+    headers = {
+        'Authorization': 'Bearer ',
+        "Content-Type": "application/json"
+    }
+    json_params = {
+        'long_url': link
+    }
+    response = requests.post('https://api-ssl.bitly.com/v4/shorten', headers=headers,
+                             json=json_params).json()
+    await types.ChatActions.typing(5)
+    code = qiwi_links_generator.generate_payment_code()
+    new_db_data = IsPaying(id=message.from_user.id, code=code)
+    session.add(new_db_data)
+    session.commit()
+    for_message = [f'Ваш код для оплаты: {code}',
+                   '**ОБЯЗАТЕЛЬНО УКАЖИТЕ ЕГО В КОММЕНТАРИЯХ К ПЛАТЕЖУ, ИНАЧЕ ПОТЕРЯЕТЕ ДЕНЬГИ!**']
+    await bot.send_message(message.from_user.id, '\n'.join(for_message))
+    link = response['link']
+    await types.ChatActions.typing(2)
+    msg = phrases.all_okay(chosen_crypto, link)
+    await bot.send_message(message.from_user.id, msg, reply_markup=keyboards.payment_button)
 
 
 @dp.message_handler()
@@ -421,9 +432,9 @@ def register_graph_handlers(dispatcher):
 
 def register_buy_handlers(dispatcher):
     dispatcher.register_message_handler(start_buying_command, commands="buy", state='*')
-    dispatcher.register_message_handler(phone_sent, state=BuyingState.waiting_for_number)
     dispatcher.register_message_handler(crypto_for_buy_chosen, state=BuyingState.waiting_for_crypto)
     dispatcher.register_message_handler(amount_for_buy_chosen, state=BuyingState.waiting_for_amount)
+    dispatcher.register_message_handler(generating_code, state=BuyingState.code_generate)
 
 
 if __name__ == '__main__':

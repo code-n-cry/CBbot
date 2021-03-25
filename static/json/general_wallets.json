@@ -1,6 +1,6 @@
 {
   "Wallets":  {
-    "DOGE": "DLF1WU9GBQ1CLisrwsePjUntFGgBGS2FR7",
+    "DOGE": "",
     "BTC": "",
     "LTC": "",
     "ETH": ""
@@ -9,5 +9,8 @@
     "BlockCypher": "",
     "Qiwi": "",
     "Tg_Token": ""
+  },
+  "Secrets": {
+    "DOGE": ""
   }
 }
