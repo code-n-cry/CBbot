@@ -7,4 +7,6 @@ class IsPaying(DataBase):
 
     number = sql.Column(sql.Integer, primary_key=True, autoincrement=True)
     id = sql.Column(sql.Integer, index=True, unique=False, nullable=False)
-    code = sql.Column(sql.String, nullable=False, unique=False, index=True)
+    code = sql.Column(sql.String, nullable=False, unique=True, index=True)
+    crypto_currency_name = sql.Column(sql.String, nullable=False, unique=False,
+                                      index=False)  # чтобы помнить, какая именно криптовалюта нужна юзеру

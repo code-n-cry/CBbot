@@ -8,7 +8,8 @@
   "Tokens": {
     "BlockCypher": "",
     "Qiwi": "",
-    "Tg_Token": ""
+    "Tg_Token": "",
+    "Qiwi_phone": ""
   },
   "Secrets": {
     "DOGE": ""

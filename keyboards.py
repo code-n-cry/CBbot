@@ -5,8 +5,8 @@ from phrases import available_crypto, fiats_for_buttons, available_periods
 button_help = InlineKeyboardButton('Вызвать помощь', callback_data='help')
 help_kb = InlineKeyboardMarkup().add(button_help)
 
-payment_button = InlineKeyboardButton('Оплачено', callback_data='did')
-payment_kb = InlineKeyboardMarkup().add(payment_button)
+payment_button = KeyboardButton('Оплачено', callback_data='did')
+payment_kb = ReplyKeyboardMarkup(resize_keyboard=True).add(payment_button)
 
 
 create_button = KeyboardButton('Создать аккаунт')

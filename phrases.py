@@ -6,9 +6,8 @@ def start_phrase(name):
 
 def all_okay(chosen_crypto: str, link: str):
     lst = [f'Отлично, вы можете купить это количество {cryptos_abbreviations[chosen_crypto]}.',
-           '**ВНИМАНИЕ! При переводе в комментарии укажите код, который был выслан в сообщении выше.** Без этого вы просто потеряете средства'
            f'Совершите перевод по {link} и нажмите на кнопку внизу, чтобы подтвердить перевод']
-    return
+    return '\n'.join(lst)
 
 
 def price_info(crypto: str, fiat: str, price: float, fiat_code: str):

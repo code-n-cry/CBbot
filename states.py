@@ -20,4 +20,5 @@ class BuildGraph(StatesGroup):
 class BuyingState(StatesGroup):
     waiting_for_crypto = State()
     waiting_for_amount = State()
-    code_generate = State()
+    waiting_for_wallet = State()
+    wallet_sent = State()
