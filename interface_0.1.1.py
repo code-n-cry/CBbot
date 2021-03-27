@@ -1,6 +1,5 @@
 import json
 import os
-from smtplib import SMTPRecipientsRefused
 import moneywagon
 import requests
 import keyboards
@@ -10,6 +9,7 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.types import ReplyKeyboardRemove, ParseMode
 from aiogram.utils.markdown import bold
+from smtplib import SMTPRecipientsRefused
 from time import sleep
 from checking_email import EmailDoesNotExists, verify_email
 from data import db_session
@@ -19,23 +19,24 @@ from data.waiting_for_money import IsPaying
 from modules.math_operations import MathOperations
 from modules.crypto_operations import CryptoOperating
 from modules.payment_operations import PaymentOperations
+from emoji import emojize
 from states import GetPrice, GetEmail, BuildGraph, BuyingState
 
 print('DB initialization.....')
 db_session.initialization('db/all_data.sqlite')
 with open('static/json/phrases.json', encoding='utf-8') as phrases_json:
-    all_data = json.load(phrases_json)
-    str_phrases = all_data['str_phrases']
-    list_phrases = all_data['list_phrases']
-with open('static/json/general_wallets.json', encoding='utf-8') as tokens:
-    all_data = json.load(tokens)
-    qiwi_token = all_data['Tokens']['Qiwi']
-    qiwi_phone = all_data['Tokens']['Qiwi_phone']
-    token = all_data['Tokens']['Tg_Token']
-    dogecoin_wallet = all_data['Wallets']['DOGE']
+    need_data = json.load(phrases_json)
+    str_phrases = need_data['str_phrases']
+    list_phrases = need_data['list_phrases']
+with open('static/json/general_bot_info.json', encoding='utf-8') as tokens:
+    need_data = json.load(tokens)
+    qiwi_token = need_data['Tokens']['Qiwi']
+    qiwi_phone = need_data['Tokens']['Qiwi_phone']
+    token = need_data['Tokens']['Tg_Token']
+    dogecoin_wallet = need_data['Wallets']['DOGE']
 with open('static/json/crypto_fees.json', encoding='utf-8') as fees:
-    all_data = json.load(fees)
-    crypto_fees = all_data['Fees']
+    need_data = json.load(fees)
+    crypto_fees = need_data['Fees']
 print('Bot starting...')
 bot = Bot(token=token)
 storage = MemoryStorage()
@@ -109,7 +110,7 @@ async def process_account_command(message):
         await bot.send_message(message.from_user.id,
                                phrases.account_info(btc_wallet, ltc_wallet, doge_wallet, eth_wallet))
     else:
-        await bot.send_message(message.from_user.id, str_phrases['no_account'])
+        await bot.send_message(message.from_user.id, emojize(str_phrases['no_account']))
 
 
 @dp.message_handler(commands=['email', 'почта'])
@@ -118,7 +119,8 @@ async def start_email_command(message):
     is_user_in_db = [user for user in db_sess.query(User).filter(User.id == message.from_user.id)]
     await types.ChatActions.typing()
     if not is_user_in_db:
-        await bot.send_message(message.from_user.id, str_phrases['send_me_email'])
+        await bot.send_message(message.from_user.id, str_phrases['send_me_email'],
+                               reply_markup=ReplyKeyboardRemove())
         await GetEmail.waiting_for_email.set()
         return
     await bot.send_message(message.from_user.id, str_phrases['already_registered'])
@@ -141,21 +143,23 @@ async def email_sent(message, state):
             await types.ChatActions.typing()
             await bot.send_message(message.from_user.id, str_phrases['code_sent'],
                                    reply_markup=ReplyKeyboardRemove())
-            await bot.send_message(message.from_user.id, str_phrases['send_code_next'], )
+            await bot.send_message(message.from_user.id, str_phrases['send_code_next'])
             await GetEmail.next()
         else:
             await types.ChatActions.typing()
-            await bot.send_message(message.from_user.id, str_phrases['this_mail_used'])
+            await bot.send_message(message.from_user.id, str_phrases['this_mail_used'],
+                                   reply_markup=ReplyKeyboardRemove())
+            await state.finish()
     except EmailDoesNotExists:
         await types.ChatActions.typing()
         await bot.send_message(message.from_user.id, str_phrases['invalid_email'],
                                reply_markup=keyboards.newbie_kb)
-        state.finish()
+        await state.finish()
     except SMTPRecipientsRefused:
         await types.ChatActions.typing()
         await bot.send_message(message.from_user.id, str_phrases['invalid_email'],
                                reply_markup=keyboards.newbie_kb)
-        state.finish()
+        await state.finish()
 
 
 async def code_sent(message, state):
@@ -184,17 +188,17 @@ async def code_sent(message, state):
                 await types.ChatActions.typing()
                 await bot.send_message(message.from_user.id, str_phrases['invalid_email'],
                                        reply_markup=keyboards.newbie_kb)
-                state.finish()
+                await state.finish()
         else:
             await types.ChatActions.typing()
             await bot.send_message(message.from_user.id, str_phrases['mail_not_specified'],
                                    reply_markup=keyboards.newbie_kb)
-            state.finish()
+            await state.finish()
     except ValueError:
         await types.ChatActions.typing()
         await bot.send_message(message.from_user.id, str_phrases['invalid_email'],
                                reply_markup=keyboards.newbie_kb)
-        state.finish()
+        await state.finish()
 
 
 @dp.message_handler(commands=['price', 'курс'])
@@ -246,7 +250,7 @@ async def start_graph_command(message):
     keyboard = keyboards.cryptos_kb
     await BuildGraph.waiting_for_crypto.set()
     await types.ChatActions.typing()
-    await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'],
+    await bot.send_message(message.from_user.id, "Выберите криптовалюту из предложенных:",
                            reply_markup=keyboard)
 
 
@@ -401,13 +405,17 @@ async def send_me_wallet(message: types.message, state):
     await bot.send_message(message.from_user.id, '\n'.join(phrase),
                            reply_markup=ReplyKeyboardRemove())
     await BuyingState.next()
+    for data in need_data:
+        session.delete(data)
+    session.commit()
 
 
 async def finishing(message: types.message, state):
     wallet = message.text
     data = await state.get_data()
     crypto_operations.send_transaction('doge', wallet, int(data['chosen_amount']))
-    await bot.send_message(message.from_user.id, 'Транзакция отправлена, просмотреть её статус вы можете на {нужный сайт}.com!')
+    await bot.send_message(message.from_user.id,
+                           'Транзакция отправлена, просмотреть её статус вы можете на {нужный сайт}.com!')
     await state.finish()
 
 

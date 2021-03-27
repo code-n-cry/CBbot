@@ -6,7 +6,7 @@ from cryptos import *
 
 class CryptoOperating:
     def __init__(self):
-        with open(os.getcwd() + '\\static\\json\\general_wallets.json',
+        with open(os.getcwd() + '\\static\\json\\general_bot_info.json',
                   encoding='utf-8') as json_data:
             all_data = json.load(json_data)
             self.addresses = all_data['Wallets']
