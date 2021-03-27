@@ -1,0 +1,17 @@
+{
+  "Wallets":  {
+    "DOGE": "",
+    "BTC": "",
+    "LTC": "",
+    "ETH": ""
+  },
+  "Tokens": {
+    "BlockCypher": "",
+    "Qiwi": "",
+    "Tg_Token": "",
+    "Qiwi_phone": ""
+  },
+  "Secrets": {
+    "DOGE": ""
+  }
+}

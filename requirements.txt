@@ -1,0 +1,15 @@
+aiogram==2.12
+py3DNS==3.2.1
+validate_email==1.3
+moneywagon~=1.22.3
+sqlalchemy==1.4.0
+
+mnemonic~=0.19
+bip32utils~=0.3.post4
+pysendpulse~=0.1.2
+matplotlib==3.3.4
+cryptocmd~=0.6.0
+pymorphy2~=0.9.1
+blockcypher~=1.0.91
+cryptos~=1.36
+requests~=2.11.1
