@@ -1,12 +1,15 @@
 from blockcypher import *
 import json
 import os
+import requests
 from cryptos import *
+from pywallet import wallet
+from exceptions import InvalidAddress
 
 
 class CryptoOperating:
     def __init__(self):
-        with open(os.getcwd() + '\\static\\json\\general_bot_info.json',
+        with open('static/json/general_bot_info.json',
                   encoding='utf-8') as json_data:
             all_data = json.load(json_data)
             self.addresses = all_data['Wallets']
@@ -20,6 +23,36 @@ class CryptoOperating:
             'LTC': self.ltc_class,
             'DOGE': self.doge_class
         }
+
+    def generate_bitcoin_wallet(self):
+        seed = wallet.generate_mnemonic()
+        btc_wallet = wallet.create_wallet('BTC', seed, 0)
+        return btc_wallet['address'], btc_wallet['private_key']
+
+    def generate_litecoin_wallet(self):
+        seed = wallet.generate_mnemonic()
+        ltc_wallet = wallet.create_wallet('LTC', seed, 0)
+        return ltc_wallet['address'], ltc_wallet['private_key']
+
+    def generate_dogecoin_wallet(self):
+        seed = wallet.generate_mnemonic()
+        doge_wallet = wallet.create_wallet('DOGE', seed, 0)
+        return doge_wallet['address'], doge_wallet['private_key']
+
+    def generate_eth_wallet(self):
+        pass
+
+    def check_crypto_wallet(self, crypto_abbreviation: str, crypto_wallet: str):
+        abbreviations_to_full = {
+            'DOGE': f'https://dogechain.info/api/v1/address/balance/{crypto_wallet}',
+            'BTC': f'https://blockchain.info/rawaddr/{crypto_wallet}',
+            'LTC': f'https://api.blockcypher.com/v1/ltc/main/addrs/{crypto_wallet}/balance',
+            'ETH': f'https://api.blockcypher.com/v1/eth/main/addrs/{crypto_wallet}/balance'
+        }
+        response = requests.get(abbreviations_to_full[crypto_abbreviation]).json()
+        if 'error' in list(response.keys()):
+            raise InvalidAddress
+        return True
 
     def send_doges(self, to_public_address: str, amount: int):
         amount *= 1

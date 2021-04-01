@@ -9,9 +9,10 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.types import ReplyKeyboardRemove, ParseMode
 from aiogram.utils.markdown import bold
+from exceptions import EmailDoesNotExists, InvalidAddress
 from smtplib import SMTPRecipientsRefused
 from time import sleep
-from checking_email import EmailDoesNotExists, verify_email
+from checking_email import verify_email
 from data import db_session
 from data.user import User
 from data.verification import IsVerifying
@@ -20,7 +21,7 @@ from modules.math_operations import MathOperations
 from modules.crypto_operations import CryptoOperating
 from modules.payment_operations import PaymentOperations
 from emoji import emojize
-from states import GetPrice, GetEmail, BuildGraph, BuyingState
+from states import GetPrice, GetEmail, BuildGraph, BuyingState, BindWallet
 
 print('DB initialization.....')
 db_session.initialization('db/all_data.sqlite')
@@ -44,25 +45,45 @@ dp = Dispatcher(bot, storage=storage)
 dp.middleware.setup(LoggingMiddleware())
 plot_builder = MathOperations('', '', '', '')
 crypto_operations = CryptoOperating()
+crypto_to_their_operations = {
+    'BTC': crypto_operations.generate_bitcoin_wallet,
+    'LTC': crypto_operations.generate_litecoin_wallet,
+    'DOGE': crypto_operations.generate_dogecoin_wallet
+}
 qiwi_links_generator = PaymentOperations(qiwi_token, qiwi_phone)
 is_paying = False
 
 
+def is_user_logged(tg_user_id: int):
+    session = db_session.create_session()
+    check = session.query(User).get(tg_user_id)
+    if check:
+        return True
+    return False
+
+
 @dp.message_handler(commands=['start'])
-async def process_start_command(message):
+async def process_start_command(message: types.message):
     name = message.from_user.first_name
     await bot.send_message(message.from_user.id, phrases.start_phrase(name),
                            reply_markup=keyboards.help_kb)
+
+
+@dp.message_handler(commands=['account'])
+async def account_operations(message):
+    reply_kb = keyboards.not_logged_kb
+    msg_text = str_phrases['not_logged']
+    if is_user_logged(message.from_user.id):
+        reply_kb = keyboards.logged_kb
+        msg_text = str_phrases['is_logged']
+    await bot.send_message(message.from_user.id, msg_text, reply_markup=reply_kb)
 
 
 @dp.callback_query_handler(lambda call: True)
 async def process_callbacks(call):
     if call.data == 'help':
         reply_markup = keyboards.main_kb
-        session = db_session.create_session()
-        is_user_in_db = [user for user in
-                         session.query(User).filter(User.id == call.from_user.id)]
-        if not is_user_in_db:
+        if not is_user_logged(call.from_user.id):
             reply_markup = keyboards.newbie_kb
         await bot.answer_callback_query(call.id)
         await bot.send_message(call.from_user.id, '\n'.join(list_phrases['help_message']),
@@ -70,35 +91,30 @@ async def process_callbacks(call):
 
 
 @dp.message_handler(commands=['помощь', 'help'])
-async def process_help_command(message):
+async def process_help_command(message: types.message):
     reply_markup = keyboards.main_kb
-    session = db_session.create_session()
-    is_user_in_db = [user for user in session.query(User).filter(User.id == message.from_user.id)]
     await types.ChatActions.typing()
-    if not is_user_in_db:
+    if not is_user_logged(message.from_user.id):
         reply_markup = keyboards.newbie_kb
     await bot.send_message(message.from_user.id, '\n'.join(list_phrases['help_message']),
                            reply_markup=reply_markup)
 
 
 @dp.message_handler(commands=['create', 'создать'])
-async def process_create_command(message):
-    db_sess = db_session.create_session()
-    is_user_in_db = [user for user in db_sess.query(User).filter(User.id == message.from_user.id)]
+async def process_create_command(message: types.message):
     await types.ChatActions.typing()
-    if is_user_in_db:
+    if is_user_logged(message.from_user.id):
         await bot.send_message(message.from_user.id, str_phrases['already_registered'])
     else:
         await bot.send_message(message.from_user.id, '\n'.join(list_phrases['creating_msg']),
                                reply_markup=keyboards.email_kb)
 
 
-@dp.message_handler(commands=['account', 'инфо', 'info'])
-async def process_account_command(message):
+@dp.message_handler(commands=['инфо', 'info'])
+async def process_account_command(message: types.message):
     db_sess = db_session.create_session()
-    is_user_in_db = [user for user in db_sess.query(User).filter(User.id == message.from_user.id)]
     await types.ChatActions.typing()
-    if is_user_in_db:
+    if is_user_logged(message.from_user.id):
         btc_wallet = [user.bitcoin_wallet for user in
                       db_sess.query(User).filter(User.id == message.from_user.id)][0]
         ltc_wallet = [user.litecoin_wallet for user in
@@ -114,16 +130,90 @@ async def process_account_command(message):
 
 
 @dp.message_handler(commands=['email', 'почта'])
-async def start_email_command(message):
-    db_sess = db_session.create_session()
-    is_user_in_db = [user for user in db_sess.query(User).filter(User.id == message.from_user.id)]
+async def start_email_command(message: types.message):
     await types.ChatActions.typing()
-    if not is_user_in_db:
+    if is_user_logged(message.from_user.id):
         await bot.send_message(message.from_user.id, str_phrases['send_me_email'],
                                reply_markup=ReplyKeyboardRemove())
         await GetEmail.waiting_for_email.set()
         return
+    await types.ChatActions.typing(2)
     await bot.send_message(message.from_user.id, str_phrases['already_registered'])
+
+
+@dp.message_handler(commands=['bind'])
+async def bind_command_start(message: types.message):
+    msg_text = "В следующем сообщении выберите нужную криптовалюту:"
+    reply_kb = keyboards.cryptos_kb
+    await types.ChatActions.typing(3)
+    await bot.send_message(message.from_user.id, msg_text, reply_markup=reply_kb)
+    await BindWallet.waiting_for_crypto.set()
+
+
+async def waiting_for_crypto_for_bind(message: types.message, state):
+    chosen_crypto = message.text
+    if chosen_crypto not in phrases.available_crypto:
+        await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'])
+        return
+    crypto_abbreviation = phrases.cryptos_abbreviations[chosen_crypto]
+    await types.ChatActions.typing(3)
+    await state.update_data(chosen_crypto=crypto_abbreviation)
+    await bot.send_message(message.from_user.id, str_phrases['send_wallet_variant'],
+                           reply_markup=keyboards.variants_kb)
+    await BindWallet.next()
+
+
+async def waiting_for_bind_variant(message: types.message, state):
+    if message.text not in phrases.available_variants:
+        await bot.send_message(message.from_user.id,
+                               'Пожалуйста, выбирайте из предложенных вариантов')
+        return
+    chosen_variant = message.text
+    state_data = await state.get_data()
+    if chosen_variant == phrases.available_variants[0]:
+        # если пользователь хочет сгенерировать кошелёк себе
+        abbreviation_to_function = {
+            'BTC': crypto_operations.generate_bitcoin_wallet,
+            'LTC': crypto_operations.generate_litecoin_wallet,
+            'DOGE': crypto_operations.generate_dogecoin_wallet,
+            'ETH': crypto_operations.generate_eth_wallet
+        }
+        address, private = abbreviation_to_function[state_data['chosen_crypto']]()
+        await bot.send_message(message.from_user.id,
+                               phrases.wallet_info(address, private, state_data['chosen_crypto']),
+                               reply_markup=keyboards.main_kb, parse_mode=ParseMode.MARKDOWN)
+        session = db_session.create_session()
+        current_user = session.query(User).filter(User.id == message.from_user.id).first()
+        exec(
+            f'current_user.{phrases.abbreviations_to_crypto[state_data["chosen_crypto"]]}_wallet="{address}"')
+        # выше конструкция для занесения в базу данных адреса кошелька, т.к. удобнее способа мы не нашли, данные добавляются через строку
+        session.add(current_user)
+        session.commit()
+        await state.finish()
+    else:
+        await bot.send_message(message.from_user.id,
+                               f'Хорошо, теперь пришлите адрес {state_data["chosen_crypto"]}-кошелька:',
+                               reply_markup=ReplyKeyboardRemove())
+        await BindWallet.next()
+
+
+async def wallet_for_bind_sent(message: types.Message, state):
+    try:
+        address = message.text
+        state_data = await state.get_data()
+        if crypto_operations.check_crypto_wallet(state_data['chosen_crypto'], address):
+            await bot.send_message(message.from_user.id, str_phrases['wallet_ok'],
+                                   reply_markup=keyboards.main_kb)
+            session = db_session.create_session()
+            current_user = session.query(User).filter(User.id == message.from_user.id).first()
+            exec(
+                f'current_user.{phrases.abbreviations_to_crypto[state_data["chosen_crypto"]]}_wallet="{address}"')
+            session.add(current_user)
+            await state.finish()
+    except InvalidAddress:
+        await bot.send_message(message.from_user.id, str_phrases['invalid_wallet'],
+                               reply_markup=keyboards.main_kb)
+        await state.finish()
 
 
 async def email_sent(message, state):
@@ -426,11 +516,13 @@ async def process_text(message):
 
     if message.text.lower() == 'помощь':
         await process_help_command(message)
-    if message.text.lower() == 'создать аккаунт':
+    if message.text.lower() == 'создать аккаунт👦':
         await process_create_command(message)
-    if message.text.lower() == 'инфо об аккаунте':
+    if message.text.lower() == 'инфо об аккаунте🗄️':
         await process_account_command(message)
-    if message.text.lower() == 'курсы валют💱':
+    if message.text.lower() == 'привязать криптовалютный кошелёк👛':
+        await bind_command_start(message)
+    if message.text.lower() == 'узнать о стоимости криптовалют💱':
         await start_price_command(message)
     if message.text.lower() == 'привязать почту📩':
         await start_email_command(message)
@@ -438,6 +530,8 @@ async def process_text(message):
         await start_graph_command(message)
     if message.text.lower() == 'купить криптовалюту💸':
         await start_buying_command(message)
+    if message.text.lower() == 'операции с аккаунтом🧾':
+        await account_operations(message)
 
 
 def register_handlers_price(dispatcher):
@@ -467,10 +561,20 @@ def register_buy_handlers(dispatcher):
     dispatcher.register_message_handler(finishing, state=BuyingState.wallet_sent)
 
 
+def register_bind_handlers(dispatcher):
+    dispatcher.register_message_handler(bind_command_start, commands="bind", state='*')
+    dispatcher.register_message_handler(waiting_for_crypto_for_bind,
+                                        state=BindWallet.waiting_for_crypto)
+    dispatcher.register_message_handler(waiting_for_bind_variant,
+                                        state=BindWallet.waiting_for_variant)
+    dispatcher.register_message_handler(wallet_for_bind_sent, state=BindWallet.waiting_for_wallet)
+
+
 if __name__ == '__main__':
     register_handlers_price(dp)
     register_mail_handlers(dp)
     register_graph_handlers(dp)
     register_buy_handlers(dp)
+    register_bind_handlers(dp)
     print('Bot is running now')
     executor.start_polling(dp)

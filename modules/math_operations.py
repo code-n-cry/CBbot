@@ -12,7 +12,8 @@ class MathOperations:
     def __init__(self, period: str, crypto: str, fiat: str, plot_img_name: str):
         self.morph = pymorphy2.MorphAnalyzer()
         self.converter = CurrencyConverter()
-        with open(os.getcwd() + '\\static\\json\\month_names.json', encoding='utf-8') as json_names:
+        with open('static/json/month_names.json',
+                  encoding='utf-8') as json_names:
             self.month_names = json.load(json_names)['Months']
         self.date_lst = []
         self.period = period

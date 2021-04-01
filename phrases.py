@@ -1,3 +1,6 @@
+from aiogram.utils.markdown import bold
+
+
 def start_phrase(name):
     return '\n'.join([f'Привет, {name} 👋! ',
                       'Это CBbot(Crypto Burse bot). Он позволяет проводить какие-либо операции с криптовалютами.',
@@ -26,15 +29,30 @@ def account_info(btc_wal=False, ltc_wal=False, doge_wal=False, eth_wal=False):
     return '\n'.join(text)
 
 
+def wallet_info(address: str, private: str, crypto_abbreviation: str):
+    msg_text = [f'Адрес вашего {crypto_abbreviation}-кошелька: ' + bold(f'{address}'),
+                f'Секретный ключ: ' + bold(f'{private}'),
+                bold(
+                    'Обязательно сохраните секретный ключ ! Он не будет в базе данных, но необходим для транзакций')]
+    return '\n'.join(msg_text)
+
+
 available_crypto = ['Bitcoin', 'Litecoin', 'Ethereum', 'Dogecoin']
 available_fiat = ['рубль', 'доллар сша', 'евро']
 available_periods = ['Неделя', 'Месяц', 'Год', 'Пять лет']
 fiats_for_buttons = ['Рубль', 'Доллар США', 'Евро']
+available_variants = ['Хочу сгенерировать себе кошелёк🖨️', 'Хочу привязать собственный📝']
 cryptos_abbreviations = {
     'Bitcoin': 'BTC',
     'Ethereum': 'ETH',
     'Litecoin': 'LTC',
     'Dogecoin': 'DOGE'
+}
+abbreviations_to_crypto = {
+    'BTC': 'bitcoin',
+    'ETH': 'ethereum',
+    'LTC': 'litecoin',
+    'DOGE': 'dogecoin'
 }
 fiats_abbreviations = {
     'рубль': 'RUB',

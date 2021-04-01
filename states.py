@@ -22,3 +22,9 @@ class BuyingState(StatesGroup):
     waiting_for_amount = State()
     waiting_for_wallet = State()
     wallet_sent = State()
+
+
+class BindWallet(StatesGroup):
+    waiting_for_crypto = State()
+    waiting_for_variant = State()
+    waiting_for_wallet = State()
