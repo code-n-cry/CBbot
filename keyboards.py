@@ -21,6 +21,7 @@ help_kb = InlineKeyboardMarkup().add(button_help)
 crypto_operations = KeyboardButton('Операции с криптовалютами💲')
 buy_button = KeyboardButton('Купить криптовалюту💸')
 payment_button = KeyboardButton('Оплачено')
+available_crypto_operations = ReplyKeyboardMarkup(resize_keyboard=True).add(buy_button)
 payment_kb = ReplyKeyboardMarkup(resize_keyboard=True).add(payment_button)
 """Price info operations"""
 price_operations = KeyboardButton('Узнать о стоимости криптовалют💱')

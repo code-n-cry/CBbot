@@ -12,7 +12,7 @@ from aiogram.utils.markdown import bold
 from exceptions import EmailDoesNotExists, InvalidAddress
 from smtplib import SMTPRecipientsRefused
 from time import sleep
-from checking_email import verify_email
+from emoji import emojize
 from data import db_session
 from data.user import User
 from data.verification import IsVerifying
@@ -20,24 +20,28 @@ from data.waiting_for_money import IsPaying
 from modules.math_operations import MathOperations
 from modules.crypto_operations import CryptoOperating
 from modules.payment_operations import PaymentOperations
-from emoji import emojize
+from modules.email_operations import EmailOperations
 from states import GetPrice, GetEmail, BuildGraph, BuyingState, BindWallet
 
 print('DB initialization.....')
 db_session.initialization('db/all_data.sqlite')
 with open('static/json/phrases.json', encoding='utf-8') as phrases_json:
-    need_data = json.load(phrases_json)
-    str_phrases = need_data['str_phrases']
-    list_phrases = need_data['list_phrases']
+    all_data = json.load(phrases_json)
+    str_phrases = all_data['str_phrases']
+    list_phrases = all_data['list_phrases']
 with open('static/json/general_bot_info.json', encoding='utf-8') as tokens:
-    need_data = json.load(tokens)
-    qiwi_token = need_data['Tokens']['Qiwi']
-    qiwi_phone = need_data['Tokens']['Qiwi_phone']
-    token = need_data['Tokens']['Tg_Token']
-    dogecoin_wallet = need_data['Wallets']['DOGE']
+    all_data = json.load(tokens)
+    qiwi_token = all_data['Tokens']['Qiwi']
+    qiwi_phone = all_data['Tokens']['Qiwi_phone']
+    token = all_data['Tokens']['Tg_Token']
+    dogecoin_wallet = all_data['Wallets']['DOGE']
 with open('static/json/crypto_fees.json', encoding='utf-8') as fees:
-    need_data = json.load(fees)
-    crypto_fees = need_data['Fees']
+    all_data = json.load(fees)
+    crypto_fees = all_data['Fees']
+with open('static/json/general_bot_info.json', encoding='utf-8') as input_json:
+    all_data = json.load(input_json)
+    bot_email = all_data['Email']['email']
+    bot_password = all_data['Email']['Password']
 print('Bot starting...')
 bot = Bot(token=token)
 storage = MemoryStorage()
@@ -45,6 +49,7 @@ dp = Dispatcher(bot, storage=storage)
 dp.middleware.setup(LoggingMiddleware())
 plot_builder = MathOperations('', '', '', '')
 crypto_operations = CryptoOperating()
+email_operations = EmailOperations(bot_email, bot_password)
 crypto_to_their_operations = {
     'BTC': crypto_operations.generate_bitcoin_wallet,
     'LTC': crypto_operations.generate_litecoin_wallet,
@@ -98,6 +103,16 @@ async def process_help_command(message: types.message):
         reply_markup = keyboards.newbie_kb
     await bot.send_message(message.from_user.id, '\n'.join(list_phrases['help_message']),
                            reply_markup=reply_markup)
+
+
+@dp.message_handler(commands=['crypto'])
+async def crypto_actions(message):
+    if is_user_logged(message.from_user.id):
+        await bot.send_message(message.from_user.id,
+                               'Сейчас в нашей системе доступны такие операции(на клавиатуре):',
+                               reply_markup=keyboards.available_crypto_operations)
+        return
+    await bot.send_message(message.from_user.id, str_phrases['u_need_account'])
 
 
 @dp.message_handler(commands=['create', 'создать'])
@@ -222,7 +237,7 @@ async def email_sent(message, state):
         session = db_session.create_session()
         is_email_in_db = [user for user in session.query(User).filter(User.email == mail)]
         if not is_email_in_db:
-            code = verify_email(mail, message.from_user.first_name)
+            code = email_operations.verify_email(mail, message.from_user.first_name)
             data = IsVerifying()
             data.id = message.from_user.id
             data.code = code
@@ -408,10 +423,13 @@ async def period_for_graph_chosen(message, state):
 
 @dp.message_handler(commands=['buy', 'купить'])
 async def start_buying_command(message: types.message):
-    await types.ChatActions.typing()
-    await BuyingState.waiting_for_crypto.set()
-    await bot.send_message(message.from_user.id, '\n'.join(list_phrases['start_buying']),
-                           reply_markup=keyboards.cryptos_kb)
+    if is_user_logged(message.from_user.id):
+        await types.ChatActions.typing(2)
+        await BuyingState.waiting_for_crypto.set()
+        await bot.send_message(message.from_user.id, '\n'.join(list_phrases['start_buying']),
+                               reply_markup=keyboards.cryptos_kb)
+    else:
+        await bot.send_message(message.from_user.id, str_phrases['u_need_account'])
 
 
 async def crypto_for_buy_chosen(message: types.message, state):
@@ -428,47 +446,54 @@ async def crypto_for_buy_chosen(message: types.message, state):
 
 
 async def generating_code(message: types.message, state):
-    chosen_amount = float(message.text)
-    session = db_session.create_session()
-    state_data = await state.get_data()
-    chosen_crypto = state_data['chosen_crypto']
-    await state.update_data(chosen_amount=chosen_amount)
-    our_amount = crypto_operations.get_balance(phrases.cryptos_abbreviations[chosen_crypto])
-    if our_amount <= chosen_amount:
-        await bot.send_message(message.from_user.id, str_phrases.so_poor)
-        await state.finish()
+    try:
+        chosen_amount = float(message.text)
+        session = db_session.create_session()
+        state_data = await state.get_data()
+        chosen_crypto = state_data['chosen_crypto']
+        await state.update_data(chosen_amount=chosen_amount)
+        our_amount = crypto_operations.get_balance(phrases.cryptos_abbreviations[chosen_crypto])
+        if our_amount <= chosen_amount:
+            await bot.send_message(message.from_user.id, str_phrases['so_poor'])
+            await state.finish()
+            return
+        rub_price = moneywagon.get_current_price(phrases.cryptos_abbreviations[chosen_crypto], 'RUB')
+        rub_and_cop = round(round(rub_price, 2) * (chosen_amount + crypto_fees[chosen_crypto]), 2)
+        if not rub_and_cop.is_integer():
+            link = qiwi_links_generator.create_bill(int(str(rub_and_cop).split('.')[0]),
+                                                    int(str(rub_and_cop).split('.')[1]))
+        else:
+            link = qiwi_links_generator.create_bill(rub_and_cop, 0)
+        headers = {
+            'Authorization': 'Bearer 77397c6ca2362f76abb2bdff47d1b6bb44c0fdff',
+            "Content-Type": "application/json"
+        }
+        json_params = {
+            'long_url': link
+        }
+        response = requests.post('https://api-ssl.bitly.com/v4/shorten', headers=headers,
+                                 json=json_params).json()
+        await types.ChatActions.typing(2)
+        code = qiwi_links_generator.generate_payment_code()
+        await state.update_data(tx_code=code)
+        new_db_data = IsPaying(id=message.from_user.id, code=code,
+                               crypto_currency_name=phrases.cryptos_abbreviations[chosen_crypto])
+        session.add(new_db_data)
+        session.commit()
+        for_message = [f'Ваш код для оплаты: {code}',
+                       bold(
+                           'ОБЯЗАТЕЛЬНО УКАЖИТЕ ЕГО В КОММЕНТАРИЯХ К ПЛАТЕЖУ, ИНАЧЕ ПОТЕРЯЕТЕ ДЕНЬГИ')]
+        await bot.send_message(message.from_user.id, '\n'.join(for_message),
+                               parse_mode=ParseMode.MARKDOWN)
+        link = response['link']
+        await types.ChatActions.typing(2)
+        msg = phrases.all_okay(chosen_crypto, link)
+        await bot.send_message(message.from_user.id, msg, reply_markup=keyboards.payment_kb)
+        await BuyingState.next()
+    except ValueError:
+        await types.ChatActions.typing(2)
+        await bot.send_message(message.from_user.id, str_phrases['just_number'])
         return
-    rub_price = moneywagon.get_current_price(phrases.cryptos_abbreviations[chosen_crypto], 'RUB')
-    rub_and_cop = round(round(rub_price, 2) * (chosen_amount + crypto_fees[chosen_crypto]), 2)
-    if not rub_and_cop.is_integer():
-        link = qiwi_links_generator.create_bill(int(str(rub_and_cop).split('.')[0]),
-                                                int(str(rub_and_cop).split('.')[1]))
-    else:
-        link = qiwi_links_generator.create_bill(rub_and_cop, 0)
-    headers = {
-        'Authorization': 'Bearer 77397c6ca2362f76abb2bdff47d1b6bb44c0fdff',
-        "Content-Type": "application/json"
-    }
-    json_params = {
-        'long_url': link
-    }
-    response = requests.post('https://api-ssl.bitly.com/v4/shorten', headers=headers,
-                             json=json_params).json()
-    await types.ChatActions.typing(2)
-    code = qiwi_links_generator.generate_payment_code()
-    new_db_data = IsPaying(id=message.from_user.id, code=code,
-                           crypto_currency_name=phrases.cryptos_abbreviations[chosen_crypto])
-    session.add(new_db_data)
-    session.commit()
-    for_message = [f'Ваш код для оплаты: {code}',
-                   bold('ОБЯЗАТЕЛЬНО УКАЖИТЕ ЕГО В КОММЕНТАРИЯХ К ПЛАТЕЖУ, ИНАЧЕ ПОТЕРЯЕТЕ ДЕНЬГИ')]
-    await bot.send_message(message.from_user.id, '\n'.join(for_message),
-                           parse_mode=ParseMode.MARKDOWN)
-    link = response['link']
-    await types.ChatActions.typing(2)
-    msg = phrases.all_okay(chosen_crypto, link)
-    await bot.send_message(message.from_user.id, msg, reply_markup=keyboards.payment_kb)
-    await BuyingState.next()
 
 
 async def send_me_wallet(message: types.message, state):
@@ -501,11 +526,18 @@ async def send_me_wallet(message: types.message, state):
 
 
 async def finishing(message: types.message, state):
+    session = db_session.create_session()
+    user = session.query(User).filter(User.id == message.from_user.id).first()
+    user_email = user.email
     wallet = message.text
     data = await state.get_data()
+    chosen_crypto = data['chosen_crypto']
+    chosen_amount = data['chosen_amount']
+    tx_code = data['tx_code']
     crypto_operations.send_transaction('doge', wallet, int(data['chosen_amount']))
     await bot.send_message(message.from_user.id,
                            'Транзакция отправлена, просмотреть её статус вы можете на {нужный сайт}.com!')
+    email_operations.send_buy_info(user_email, tx_code, chosen_crypto, chosen_amount)
     await state.finish()
 
 
@@ -513,7 +545,6 @@ async def finishing(message: types.message, state):
 async def process_text(message):
     """Делаем так, чтобы комманды были доступны с помощью клавиатуры и обычных фраз, а не только
     команд типа /команда"""
-
     if message.text.lower() == 'помощь':
         await process_help_command(message)
     if message.text.lower() == 'создать аккаунт👦':
@@ -532,6 +563,8 @@ async def process_text(message):
         await start_buying_command(message)
     if message.text.lower() == 'операции с аккаунтом🧾':
         await account_operations(message)
+    if message.text.lower() == 'операции с криптовалютами💲':
+        await crypto_actions(message)
 
 
 def register_handlers_price(dispatcher):

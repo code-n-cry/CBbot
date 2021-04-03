@@ -40,7 +40,9 @@ class CryptoOperating:
         return doge_wallet['address'], doge_wallet['private_key']
 
     def generate_eth_wallet(self):
-        pass
+        seed = wallet.generate_mnemonic()
+        eth_wallet = wallet.create_wallet('ETH', seed, 0)
+        return eth_wallet['address'], eth_wallet['private_key']
 
     def check_crypto_wallet(self, crypto_abbreviation: str, crypto_wallet: str):
         abbreviations_to_full = {
