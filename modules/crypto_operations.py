@@ -23,6 +23,17 @@ class CryptoOperating:
             'LTC': self.ltc_class,
             'DOGE': self.doge_class
         }
+        self.abbreviations_to_link = {
+            'DOGE': 'https://dogechain.info/api/v1/address/balance/',
+            'BTC': 'https://blockchain.info/rawaddr/',
+            'LTC': 'https://api.blockcypher.com/v1/ltc/main/addrs/',
+            'ETH': 'https://api.blockcypher.com/v1/eth/main/addrs/'
+        }
+        self.abbreviation_to_tx_function = {
+            'DOGE': self.send_doges,
+            'BTC': self.send_bitcoins,
+            'LTC': self.send_ltc
+        }
 
     def generate_bitcoin_wallet(self):
         seed = wallet.generate_mnemonic()
@@ -45,23 +56,33 @@ class CryptoOperating:
         return eth_wallet['address'], eth_wallet['private_key']
 
     def check_crypto_wallet(self, crypto_abbreviation: str, crypto_wallet: str):
-        abbreviations_to_full = {
-            'DOGE': f'https://dogechain.info/api/v1/address/balance/{crypto_wallet}',
-            'BTC': f'https://blockchain.info/rawaddr/{crypto_wallet}',
-            'LTC': f'https://api.blockcypher.com/v1/ltc/main/addrs/{crypto_wallet}/balance',
-            'ETH': f'https://api.blockcypher.com/v1/eth/main/addrs/{crypto_wallet}/balance'
-        }
-        response = requests.get(abbreviations_to_full[crypto_abbreviation]).json()
+        url = self.abbreviations_to_link[crypto_abbreviation] + f'{crypto_wallet}/balance'
+        if crypto_abbreviation in ['DOGE', 'BTC']:
+            url = self.abbreviations_to_link[crypto_abbreviation] + f'{crypto_wallet}'
+        response = requests.get(url).json()
         if 'error' in list(response.keys()):
             raise InvalidAddress
         return True
 
+    def send_bitcoins(self, to_public_address: str, amount: int):
+        amount_to_satoshi = amount * 100000000
+        private_key = self.private_keys['BTC']
+        tx = simple_spend(private_key, to_public_address, amount_to_satoshi, coin_symbol='btc',
+                          api_key=self.token)
+        return tx
+
+    def send_ltc(self, to_public_address: str, amount: int):
+        amount_to_satoshi = amount * 100000000
+        private_key = self.private_keys['LTC']
+        tx = simple_spend(private_key, to_public_address, amount_to_satoshi, coin_symbol='ltc',
+                          api_key=self.token)
+        return tx
+
     def send_doges(self, to_public_address: str, amount: int):
-        amount *= 1
+        amount_to_satoshi = amount * 100000000
         private_key = self.private_keys['DOGE']
-        tx = simple_spend(private_key, to_public_address, amount, coin_symbol='doge',
-                          api_key=self.token,
-                          privkey_is_compressed=False)  # tx-сокращение от transaction
+        tx = simple_spend(private_key, to_public_address, amount_to_satoshi, coin_symbol='doge',
+                          api_key=self.token)  # tx-сокращение от transaction
         return tx
 
     def get_balance(self, crypto_abbreviation: str):
@@ -71,4 +92,5 @@ class CryptoOperating:
         return balance / 100000000
 
     def send_transaction(self, crypto_abbreviation: str, address_send_to: str, amount: int):
-        self.send_doges(address_send_to, amount * 100000000)
+        need_function = self.abbreviation_to_tx_function[crypto_abbreviation]
+        need_function(address_send_to, amount)

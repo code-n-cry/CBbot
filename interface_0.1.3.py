@@ -41,7 +41,7 @@ with open('static/json/crypto_fees.json', encoding='utf-8') as fees:
 with open('static/json/general_bot_info.json', encoding='utf-8') as input_json:
     all_data = json.load(input_json)
     bot_email = all_data['Email']['email']
-    bot_password = all_data['Email']['Password']
+    bot_password = all_data['Email']['password']
 print('Bot starting...')
 bot = Bot(token=token)
 storage = MemoryStorage()
@@ -64,6 +64,15 @@ def is_user_logged(tg_user_id: int):
     check = session.query(User).get(tg_user_id)
     if check:
         return True
+    return False
+
+
+def is_wallet_already_bound(crypto_abbreviation: str, tg_user_id: int):
+    session = db_session.create_session()
+    chosen_crypto = phrases.abbreviations_to_crypto[crypto_abbreviation]
+    user = session.query(User).filter(User.id == tg_user_id).first()
+    if eval(f'user.{chosen_crypto}_wallet'):
+        return eval(f'user.{chosen_crypto}_wallet')
     return False
 
 
@@ -173,9 +182,28 @@ async def waiting_for_crypto_for_bind(message: types.message, state):
     crypto_abbreviation = phrases.cryptos_abbreviations[chosen_crypto]
     await types.ChatActions.typing(3)
     await state.update_data(chosen_crypto=crypto_abbreviation)
+    if is_wallet_already_bound(crypto_abbreviation, message.from_user.id):
+        await bot.send_message(message.from_user.id,
+                               phrases.wallet_already_bound(crypto_abbreviation),
+                               reply_markup=keyboards.yes_or_no_kb)
+        await BindWallet.next()
+        return
     await bot.send_message(message.from_user.id, str_phrases['send_wallet_variant'],
                            reply_markup=keyboards.variants_kb)
-    await BindWallet.next()
+    await BindWallet.waiting_for_variant.set()
+
+
+async def bind_again_or_no(message: types.message, state):
+    if message.text.lower() not in ['да✔️', 'нет❌']:
+        await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'])
+    if message.text.lower() == 'да✔️':
+        await bot.send_message(message.from_user.id, str_phrases['send_wallet_variant'],
+                               reply_markup=keyboards.variants_kb)
+        await BindWallet.next()
+    if message.text.lower() == 'нет❌':
+        await bot.send_message(message.from_user.id, 'Операция отменена',
+                               reply_markup=keyboards.main_kb)
+        await state.finish()
 
 
 async def waiting_for_bind_variant(message: types.message, state):
@@ -195,16 +223,19 @@ async def waiting_for_bind_variant(message: types.message, state):
         }
         address, private = abbreviation_to_function[state_data['chosen_crypto']]()
         await bot.send_message(message.from_user.id,
-                               phrases.wallet_info(address, private, state_data['chosen_crypto']),
+                               phrases.wallet_info(address, private,
+                                                   state_data['chosen_crypto']),
                                reply_markup=keyboards.main_kb, parse_mode=ParseMode.MARKDOWN)
         session = db_session.create_session()
         current_user = session.query(User).filter(User.id == message.from_user.id).first()
         exec(
             f'current_user.{phrases.abbreviations_to_crypto[state_data["chosen_crypto"]]}_wallet="{address}"')
-        # выше конструкция для занесения в базу данных адреса кошелька, т.к. удобнее способа мы не нашли, данные добавляются через строку
+        # выше конструкция для занесения в базу данных адреса кошелька,
+        # т.к. удобнее способа мы не нашли, данные добавляются через форматированную строку
         session.add(current_user)
         session.commit()
         await state.finish()
+
     else:
         await bot.send_message(message.from_user.id,
                                f'Хорошо, теперь пришлите адрес {state_data["chosen_crypto"]}-кошелька:',
@@ -513,8 +544,12 @@ async def send_me_wallet(message: types.message, state):
                                reply_markup=reply_markup)
         await state.finish()
         return
+    await state.update_date(current_id=message.from_user.id)
     await types.ChatActions.typing(4)
     need_crypto = need_data[-1].crypto_currency_name
+    wallet = is_wallet_already_bound(need_crypto, message.from_user.id)
+    if wallet:
+        pass
     phrase = ['Отлично, платёж прошёл успешно!',
               f'Отправьте номер вашего {need_crypto}-кошелька:']
     await bot.send_message(message.from_user.id, '\n'.join(phrase),
@@ -534,9 +569,9 @@ async def finishing(message: types.message, state):
     chosen_crypto = data['chosen_crypto']
     chosen_amount = data['chosen_amount']
     tx_code = data['tx_code']
-    crypto_operations.send_transaction('doge', wallet, int(data['chosen_amount']))
-    await bot.send_message(message.from_user.id,
-                           'Транзакция отправлена, просмотреть её статус вы можете на {нужный сайт}.com!')
+    crypto_operations.send_transaction(phrases.cryptos_abbreviations[chosen_crypto], wallet,
+                                       int(data['chosen_amount']))
+    await bot.send_message(message.from_user.id, 'Транзакция отправлена!')
     email_operations.send_buy_info(user_email, tx_code, chosen_crypto, chosen_amount)
     await state.finish()
 
@@ -598,6 +633,7 @@ def register_bind_handlers(dispatcher):
     dispatcher.register_message_handler(bind_command_start, commands="bind", state='*')
     dispatcher.register_message_handler(waiting_for_crypto_for_bind,
                                         state=BindWallet.waiting_for_crypto)
+    dispatcher.register_message_handler(bind_again_or_no, state=BindWallet.bind_again_or_no)
     dispatcher.register_message_handler(waiting_for_bind_variant,
                                         state=BindWallet.waiting_for_variant)
     dispatcher.register_message_handler(wallet_for_bind_sent, state=BindWallet.waiting_for_wallet)

@@ -46,3 +46,7 @@ periods_kb = ReplyKeyboardMarkup(resize_keyboard=True)  # клавиатура �
 for period in available_periods:
     button = KeyboardButton(period)
     periods_kb.row(button)
+"""Yes or no keyboard"""
+yes_button = KeyboardButton('Да✔️')
+no_button = KeyboardButton('Нет❌')
+yes_or_no_kb = ReplyKeyboardMarkup(resize_keyboard=True).add(yes_button).add(no_button)

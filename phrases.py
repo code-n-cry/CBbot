@@ -37,6 +37,12 @@ def wallet_info(address: str, private: str, crypto_abbreviation: str):
     return '\n'.join(msg_text)
 
 
+def wallet_already_bound(crypto_abbreviation: str):
+    msg_text = [f'К вашему аккаунту уже привязан кошелёк {crypto_abbreviation}.',
+                'Вы уверены, что хотите привязать новый адрес?']
+    return '\n'.join(msg_text)
+
+
 available_crypto = ['Bitcoin', 'Litecoin', 'Ethereum', 'Dogecoin']
 available_fiat = ['рубль', 'доллар сша', 'евро']
 available_periods = ['Неделя', 'Месяц', 'Год', 'Пять лет']
