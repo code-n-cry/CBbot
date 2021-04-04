@@ -544,12 +544,13 @@ async def send_me_wallet(message: types.message, state):
                                reply_markup=reply_markup)
         await state.finish()
         return
-    await state.update_date(current_id=message.from_user.id)
     await types.ChatActions.typing(4)
     need_crypto = need_data[-1].crypto_currency_name
+    await state.update_data(chosen_crypto=need_crypto)
     wallet = is_wallet_already_bound(need_crypto, message.from_user.id)
     if wallet:
-        pass
+        await state.update_data(current_id=message.from_user.id)
+        await BuyingState.finishing_without_wallet.set()
     phrase = ['Отлично, платёж прошёл успешно!',
               f'Отправьте номер вашего {need_crypto}-кошелька:']
     await bot.send_message(message.from_user.id, '\n'.join(phrase),
@@ -569,10 +570,27 @@ async def finishing(message: types.message, state):
     chosen_crypto = data['chosen_crypto']
     chosen_amount = data['chosen_amount']
     tx_code = data['tx_code']
-    crypto_operations.send_transaction(phrases.cryptos_abbreviations[chosen_crypto], wallet,
+    crypto_operations.send_transaction(chosen_crypto, wallet,
                                        int(data['chosen_amount']))
-    await bot.send_message(message.from_user.id, 'Транзакция отправлена!')
+    await bot.send_message(message.from_user.id, str_phrases['tx_sent'])
     email_operations.send_buy_info(user_email, tx_code, chosen_crypto, chosen_amount)
+    await state.finish()
+
+
+async def finishing_without_wallet(state):
+    state_data = await state.get_data()
+    user_id = state_data['current_id']
+    chosen_wallet = f'{phrases.abbreviations_to_crypto[state_data["chosen_crypto"]]}_wallet'
+    session = db_session.create_session()
+    user = session.query(User).filter(User.id == user_id).first()
+    wallet = eval(f'user.{chosen_wallet}')
+    crypto_operations.send_transaction(state_data['chosen_crypto'], wallet,
+                                       int(state_data['chosen_amount']))
+    tx_code = state_data['tx_code']
+    user_email = user.email
+    await bot.send_message(user_id, str_phrases['tx_sent'])
+    email_operations.send_buy_info(user_email, tx_code, state_data['chosen_crypto'],
+                                   state_data['chosen_amount'])
     await state.finish()
 
 
