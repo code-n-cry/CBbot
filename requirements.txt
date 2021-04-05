@@ -12,3 +12,4 @@ cryptos~=1.36
 requests==2.25.1
 CurrencyConverter==0.16
 emoji~=1.2.0
+pywallet==0.1.0

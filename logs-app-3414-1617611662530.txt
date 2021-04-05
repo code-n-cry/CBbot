@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/app/CBbot-develop/interface_0.1.4.py", line 21, in <module>
+    from modules.crypto_operations import CryptoOperating
+  File "/app/CBbot-develop/modules/crypto_operations.py", line 6, in <module>
+    from pywallet import wallet
+ModuleNotFoundError: No module named 'pywallet'
