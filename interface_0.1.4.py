@@ -255,6 +255,7 @@ async def wallet_for_bind_sent(message: types.Message, state):
             exec(
                 f'current_user.{phrases.abbreviations_to_crypto[state_data["chosen_crypto"]]}_wallet="{address}"')
             session.add(current_user)
+            session.commit()
             await state.finish()
     except InvalidAddress:
         await bot.send_message(message.from_user.id, str_phrases['invalid_wallet'],
@@ -485,7 +486,8 @@ async def generating_code(message: types.message, state):
         await state.update_data(chosen_amount=chosen_amount)
         our_amount = crypto_operations.get_balance(phrases.cryptos_abbreviations[chosen_crypto])
         if our_amount <= chosen_amount:
-            await bot.send_message(message.from_user.id, str_phrases['so_poor'])
+            await bot.send_message(message.from_user.id, str_phrases['so_poor'],
+                                   reply_markup=keyboards.main_kb)
             await state.finish()
             return
         rub_price = moneywagon.get_current_price(phrases.cryptos_abbreviations[chosen_crypto], 'RUB')
@@ -530,6 +532,7 @@ async def generating_code(message: types.message, state):
 async def send_me_wallet(message: types.message, state):
     reply_markup = keyboards.main_kb
     session = db_session.create_session()
+    state_data = await state.get_data()
     need_data = session.query(IsPaying).filter(IsPaying.id == message.from_user.id).all()
     need_code = need_data[-1].code
     sleep(3.5)
@@ -548,17 +551,27 @@ async def send_me_wallet(message: types.message, state):
     need_crypto = need_data[-1].crypto_currency_name
     await state.update_data(chosen_crypto=need_crypto)
     wallet = is_wallet_already_bound(need_crypto, message.from_user.id)
-    if wallet:
-        await state.update_data(current_id=message.from_user.id)
-        await BuyingState.finishing_without_wallet.set()
     phrase = ['Отлично, платёж прошёл успешно!',
               f'Отправьте номер вашего {need_crypto}-кошелька:']
-    await bot.send_message(message.from_user.id, '\n'.join(phrase),
-                           reply_markup=ReplyKeyboardRemove())
-    await BuyingState.next()
-    for data in need_data:
-        session.delete(data)
-    session.commit()
+    phrase2 = ['Отлично, платёж прошёл успешно!',
+               f'Транзакция будет отправлена на привязанный {need_crypto} кошелёк!']
+    if wallet:
+        tx_code = state_data['tx_code']
+        chosen_amount = state_data['chosen_amount']
+        user = session.query(User).filter(User.id == message.from_user.id).first()
+        user_email = user.email
+        crypto_operations.send_transaction(need_crypto, wallet, int(chosen_amount))
+        email_operations.send_buy_info(user_email, tx_code, need_crypto, chosen_amount)
+        await bot.send_message(message.from_user.id, '\n'.join(phrase2),
+                               reply_markup=ReplyKeyboardRemove())
+        await state.finish()
+    else:
+        await bot.send_message(message.from_user.id, '\n'.join(phrase),
+                               reply_markup=ReplyKeyboardRemove())
+        for data in need_data:
+            session.delete(data)
+        session.commit()
+        await BuyingState.next()
 
 
 async def finishing(message: types.message, state):
@@ -574,23 +587,6 @@ async def finishing(message: types.message, state):
                                        int(data['chosen_amount']))
     await bot.send_message(message.from_user.id, str_phrases['tx_sent'])
     email_operations.send_buy_info(user_email, tx_code, chosen_crypto, chosen_amount)
-    await state.finish()
-
-
-async def finishing_without_wallet(state):
-    state_data = await state.get_data()
-    user_id = state_data['current_id']
-    chosen_wallet = f'{phrases.abbreviations_to_crypto[state_data["chosen_crypto"]]}_wallet'
-    session = db_session.create_session()
-    user = session.query(User).filter(User.id == user_id).first()
-    wallet = eval(f'user.{chosen_wallet}')
-    crypto_operations.send_transaction(state_data['chosen_crypto'], wallet,
-                                       int(state_data['chosen_amount']))
-    tx_code = state_data['tx_code']
-    user_email = user.email
-    await bot.send_message(user_id, str_phrases['tx_sent'])
-    email_operations.send_buy_info(user_email, tx_code, state_data['chosen_crypto'],
-                                   state_data['chosen_amount'])
     await state.finish()
 
 

@@ -68,21 +68,21 @@ class CryptoOperating:
         amount_to_satoshi = amount * 100000000
         private_key = self.private_keys['BTC']
         tx = simple_spend(private_key, to_public_address, amount_to_satoshi, coin_symbol='btc',
-                          api_key=self.token)
+                          api_key=self.token, privkey_is_compressed=False)
         return tx
 
     def send_ltc(self, to_public_address: str, amount: int):
         amount_to_satoshi = amount * 100000000
         private_key = self.private_keys['LTC']
         tx = simple_spend(private_key, to_public_address, amount_to_satoshi, coin_symbol='ltc',
-                          api_key=self.token)
+                          api_key=self.token, privkey_is_compressed=False)
         return tx
 
     def send_doges(self, to_public_address: str, amount: int):
         amount_to_satoshi = amount * 100000000
         private_key = self.private_keys['DOGE']
         tx = simple_spend(private_key, to_public_address, amount_to_satoshi, coin_symbol='doge',
-                          api_key=self.token)  # tx-сокращение от transaction
+                          api_key=self.token, privkey_is_compressed=False)  # tx-сокращение от transaction
         return tx
 
     def get_balance(self, crypto_abbreviation: str):
@@ -92,5 +92,4 @@ class CryptoOperating:
         return balance / 100000000
 
     def send_transaction(self, crypto_abbreviation: str, address_send_to: str, amount: int):
-        need_function = self.abbreviation_to_tx_function[crypto_abbreviation]
-        need_function(address_send_to, amount)
+        self.abbreviation_to_tx_function[crypto_abbreviation](address_send_to, amount)

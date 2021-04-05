@@ -22,7 +22,6 @@ class BuyingState(StatesGroup):
     waiting_for_amount = State()
     waiting_for_wallet = State()
     wallet_sent = State()
-    finishing_without_wallet = State()
 
 
 class BindWallet(StatesGroup):
