@@ -29,3 +29,10 @@ class BindWallet(StatesGroup):
     bind_again_or_no = State()
     waiting_for_variant = State()
     waiting_for_wallet = State()
+
+
+class CheckBalance(StatesGroup):
+    waiting_for_crypto = State()
+    wallet_is_bound = State()
+    use_users_wallet = State()
+    wallet_not_bound = State()

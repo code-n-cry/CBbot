@@ -20,13 +20,16 @@ help_kb = InlineKeyboardMarkup().add(button_help)
 """Payment operations"""
 crypto_operations = KeyboardButton('Операции с криптовалютами💲')
 buy_button = KeyboardButton('Купить криптовалюту💸')
+balance_button = KeyboardButton('Проверить баланс кошелька💰')
 payment_button = KeyboardButton('Оплачено')
-available_crypto_operations = ReplyKeyboardMarkup(resize_keyboard=True).add(buy_button)
+available_crypto_operations = ReplyKeyboardMarkup(resize_keyboard=True).row(buy_button).row(
+    balance_button)
 payment_kb = ReplyKeyboardMarkup(resize_keyboard=True).add(payment_button)
 """Price info operations"""
 price_operations = KeyboardButton('Узнать о стоимости криптовалют💱')
 price_button = KeyboardButton('Курсы криптовалют сегодня🧮')
 graph_button = KeyboardButton('График стоимости за период📈')
+price_kb = ReplyKeyboardMarkup(resize_keyboard=True).add(price_button).add(graph_button)
 """Main and newbie keyboards"""
 newbie_kb = ReplyKeyboardMarkup().row(account_operations)
 newbie_kb.row(price_operations)

@@ -21,7 +21,7 @@ from modules.math_operations import MathOperations
 from modules.crypto_operations import CryptoOperating
 from modules.payment_operations import PaymentOperations
 from modules.email_operations import EmailOperations
-from states import GetPrice, GetEmail, BuildGraph, BuyingState, BindWallet
+from states import *
 
 print('DB initialization.....')
 db_session.initialization('db/all_data.sqlite')
@@ -147,22 +147,71 @@ async def process_account_command(message: types.message):
                       db_sess.query(User).filter(User.id == message.from_user.id)][0]
         doge_wallet = [user.dogecoin_wallet for user in
                        db_sess.query(User).filter(User.id == message.from_user.id)][0]
+        await types.ChatActions.typing(2)
         await bot.send_message(message.from_user.id,
-                               phrases.account_info(btc_wallet, ltc_wallet, doge_wallet, eth_wallet))
+                               phrases.account_info(btc_wallet, ltc_wallet, doge_wallet, eth_wallet),
+                               reply_markup=keyboards.main_kb)
     else:
-        await bot.send_message(message.from_user.id, emojize(str_phrases['no_account']))
+        await types.ChatActions.typing(2)
+        await bot.send_message(message.from_user.id, emojize(str_phrases['no_account']),
+                               reply_markup=keyboards.newbie_kb)
+
+
+@dp.message_handler(commands=['balance', 'баланс'])
+async def check_balance(message: types.message):
+    if is_user_logged(message.from_user.id):
+        await types.ChatActions.typing(3)
+        await bot.send_message(message.from_user.id, str_phrases['choose_currency'],
+                               reply_markup=keyboards.cryptos_kb)
+        await CheckBalance.waiting_for_crypto.set()
+    else:
+        await types.ChatActions.typing(2)
+        await bot.send_message(message.from_user.id, str_phrases['u_need_account'],
+                               reply_markup=keyboards.newbie_kb)
+
+
+async def crypto_for_balance_chosen(message: types.message, state):
+    chosen_crypto = message.text
+    if chosen_crypto not in phrases.available_crypto:
+        await types.ChatActions.typing(3)
+        await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'])
+        return
+    await state.update_data(chosen_crypto=chosen_crypto.lower())
+    await CheckBalance.next()
+
+
+async def send_wallet_for_check(message: types.message, state):
+    state_data = await state.get_data()
+    chosen_crypto = state_data['chosen_crypto']
+    wallet = is_wallet_already_bound(phrases.cryptos_abbreviations[chosen_crypto],
+                                     message.from_user.id)
+    if wallet:
+        await bot.send_message(message.from_user.id, str_phrases['use_bounded?'],
+                               reply_markup=keyboards.yes_or_no_kb)
+        await CheckBalance.wallet_is_bound.set()
+    else:
+        await bot.send_message(message.from_user.id, str_phrases['send_wallet_next'],
+                               reply_markup=ReplyKeyboardRemove())
+        await CheckBalance.wallet_not_bound.set()
+
+
+@dp.message_handler(commands=['price_operations'])
+async def price_operations(message: types.message):
+    reply_kb = keyboards.price_kb
+    await bot.send_message(message.from_user.id, 'Выберите нужный вам вариант(на клавиатуре ниже):',
+                           reply_markup=reply_kb)
 
 
 @dp.message_handler(commands=['email', 'почта'])
 async def start_email_command(message: types.message):
     await types.ChatActions.typing()
-    if is_user_logged(message.from_user.id):
+    if not is_user_logged(message.from_user.id):
         await bot.send_message(message.from_user.id, str_phrases['send_me_email'],
                                reply_markup=ReplyKeyboardRemove())
         await GetEmail.waiting_for_email.set()
-        return
-    await types.ChatActions.typing(2)
-    await bot.send_message(message.from_user.id, str_phrases['already_registered'])
+    else:
+        await types.ChatActions.typing(2)
+        await bot.send_message(message.from_user.id, str_phrases['already_registered'])
 
 
 @dp.message_handler(commands=['bind'])
@@ -439,7 +488,7 @@ async def period_for_graph_chosen(message, state):
     plot_builder.set_new_data(chosen_period, crypto_and_fiat['chosen_crypto'],
                               crypto_and_fiat['chosen_fiat'], filename)
     plot_builder.main()
-    await types.ChatActions.upload_photo()
+    await types.ChatActions.upload_photo(2)
     media = types.MediaGroup()
     media.attach_photo(types.InputFile(filename + '.png'))
     await message.reply_media_group(media=media)
@@ -603,7 +652,11 @@ async def process_text(message):
     if message.text.lower() == 'привязать криптовалютный кошелёк👛':
         await bind_command_start(message)
     if message.text.lower() == 'узнать о стоимости криптовалют💱':
+        await price_operations(message)
+    if message.text.lower() == 'курсы криптовалют сегодня🧮':
         await start_price_command(message)
+    if message.text.lower() == 'график стоимости за период📈':
+        await start_graph_command(message)
     if message.text.lower() == 'привязать почту📩':
         await start_email_command(message)
     if message.text.lower() == 'график стоимости📈':

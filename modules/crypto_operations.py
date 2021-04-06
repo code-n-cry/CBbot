@@ -9,8 +9,7 @@ from exceptions import InvalidAddress
 
 class CryptoOperating:
     def __init__(self):
-        with open('static/json/general_bot_info.json',
-                  encoding='utf-8') as json_data:
+        with open('static/json/general_bot_info.json', encoding='utf-8') as json_data:
             all_data = json.load(json_data)
             self.addresses = all_data['Wallets']
             self.private_keys = all_data['Secrets']
@@ -82,7 +81,8 @@ class CryptoOperating:
         amount_to_satoshi = amount * 100000000
         private_key = self.private_keys['DOGE']
         tx = simple_spend(private_key, to_public_address, amount_to_satoshi, coin_symbol='doge',
-                          api_key=self.token, privkey_is_compressed=False)  # tx-сокращение от transaction
+                          api_key=self.token,
+                          privkey_is_compressed=False)  # tx-сокращение от transaction
         return tx
 
     def get_balance(self, crypto_abbreviation: str):

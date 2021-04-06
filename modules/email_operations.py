@@ -11,7 +11,7 @@ class EmailOperations:
     def __init__(self, email: str, password: str):
         self.email = email
         self.password = password
-        self.sender = smtplib.SMTP_SSL('smtp.mail.yahoo.com', 465)
+        self.sender = None
 
     def send_authorization_message(self, email_to: str, msg_text: str):
         message = multipart.MIMEMultipart()
@@ -20,6 +20,7 @@ class EmailOperations:
         phrase = ['Авторизация в CBbot']
         message['Subject'] = '\n'.join(phrase)
         message.attach(text.MIMEText(msg_text, 'plain'))
+        self.sender = smtplib.SMTP_SSL('smtp.mail.yahoo.com', 465)
         self.sender.login(self.email, self.password)
         sleep(2.5)
         self.sender.send_message(message)
@@ -34,6 +35,7 @@ class EmailOperations:
         msg_text = f""""С вашего аккаунта в системе CBbot совершена покупка {amount}
                     {crypto_currency}"""
         message.attach(text.MIMEText(msg_text, 'plain'))
+        self.sender = smtplib.SMTP_SSL('smtp.mail.yahoo.com', 465)
         self.sender.login(self.email, self.password)
         sleep(2.5)
         self.sender.send_message(message)
