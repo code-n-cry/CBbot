@@ -61,7 +61,13 @@ class CryptoOperating:
         response = requests.get(url).json()
         if 'error' in list(response.keys()):
             raise InvalidAddress
-        return True
+        balance_keys = {
+            'BTC': response['final_balance'] / 100000000,
+            'LTC': response['final_balance'] / 100000000,
+            'DOGE': response['balance'],
+            'ETH': response['balance'] / 1000000000000000000
+        }
+        return balance_keys[crypto_abbreviation]
 
     def send_bitcoins(self, to_public_address: str, amount: int):
         amount_to_satoshi = amount * 100000000

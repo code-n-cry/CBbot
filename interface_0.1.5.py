@@ -67,13 +67,13 @@ def is_user_logged(tg_user_id: int):
     return False
 
 
-def is_wallet_already_bound(crypto_abbreviation: str, tg_user_id: int):
+def is_wallet_already_bound(crypto_abbreviation: str, tg_user_id: int) -> str:
     session = db_session.create_session()
     chosen_crypto = phrases.abbreviations_to_crypto[crypto_abbreviation]
     user = session.query(User).filter(User.id == tg_user_id).first()
     if eval(f'user.{chosen_crypto}_wallet'):
         return eval(f'user.{chosen_crypto}_wallet')
-    return False
+    return ''
 
 
 @dp.message_handler(commands=['start'])
@@ -158,7 +158,7 @@ async def process_account_command(message: types.message):
 
 
 @dp.message_handler(commands=['balance', 'баланс'])
-async def check_balance(message: types.message):
+async def process_balance_command(message: types.message):
     if is_user_logged(message.from_user.id):
         await types.ChatActions.typing(3)
         await bot.send_message(message.from_user.id, str_phrases['choose_currency'],
@@ -170,40 +170,73 @@ async def check_balance(message: types.message):
                                reply_markup=keyboards.newbie_kb)
 
 
-async def crypto_for_balance_chosen(message: types.message, state):
+async def crypto_for_balance_chosen(message: types.Message, state):
     chosen_crypto = message.text
     if chosen_crypto not in phrases.available_crypto:
         await types.ChatActions.typing(3)
         await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'])
         return
     await state.update_data(chosen_crypto=chosen_crypto.lower())
-    await CheckBalance.next()
-
-
-async def send_wallet_for_check(message: types.message, state):
-    state_data = await state.get_data()
-    chosen_crypto = state_data['chosen_crypto']
     wallet = is_wallet_already_bound(phrases.cryptos_abbreviations[chosen_crypto],
                                      message.from_user.id)
     if wallet:
+        await state.update_data(need_wallet=wallet)
         await bot.send_message(message.from_user.id, str_phrases['use_bounded?'],
                                reply_markup=keyboards.yes_or_no_kb)
         await CheckBalance.wallet_is_bound.set()
     else:
+        await state.update_data(chosen_crypto=phrases.cryptos_abbreviations[chosen_crypto])
         await bot.send_message(message.from_user.id, str_phrases['send_wallet_next'],
                                reply_markup=ReplyKeyboardRemove())
         await CheckBalance.wallet_not_bound.set()
 
 
+async def use_bounded_wallet(message: types.Message, state):
+    if message.text not in ['Да✔️', 'Нет❌']:
+        await bot.send_message(message.from_user.id,
+                               'Пожалуйста, выберите из вариантов на клавиатуре',
+                               reply_markup=keyboards.yes_or_no_kb)
+        return
+    if message.text == 'Нет❌':
+        await bot.send_message(message.from_user.id, 'Хорошо, тогда отправьте нужный Вам адрес:',
+                               reply_markup=ReplyKeyboardRemove())
+        await CheckBalance.wallet_not_bound.set()
+    if message.text == 'Да✔️':
+        data = await state.get_data()
+        wallet = data['need_wallet']
+        chosen_crypto = data['chosen_crypto']
+        balance = crypto_operations.check_crypto_wallet(chosen_crypto, wallet)
+        msg_text = f'Баланс этого {chosen_crypto}-кошелька: {balance} {chosen_crypto}'
+        await types.ChatActions.typing(2)
+        await bot.send_message(message.from_user.id, msg_text, reply_markup=keyboards.main_kb)
+
+
+async def wallet_not_bound(message: types.Message, state):
+    wallet = message.text
+    state_data = await state.get_data()
+    chosen_crypto = state_data['chosen_crypto']
+    if crypto_operations.check_crypto_wallet(chosen_crypto, wallet):
+        balance = crypto_operations.check_crypto_wallet(chosen_crypto, wallet)
+        msg_text = f'Баланс этого {chosen_crypto}-кошелька: {balance} {chosen_crypto}'
+        await types.ChatActions.typing(2)
+        await bot.send_message(message.from_user.id, msg_text, reply_markup=keyboards.main_kb)
+    else:
+        msg_text = ['Кошелёк не прошёл проверку на правильность', 'Вероятно, вы ошиблись']
+        await types.ChatActions.typing(2)
+        await bot.send_message(message.from_user.id, '\n'.join(msg_text),
+                               reply_markup=keyboards.main_kb)
+        await state.finish()
+
+
 @dp.message_handler(commands=['price_operations'])
-async def price_operations(message: types.message):
+async def price_operations(message: types.Message):
     reply_kb = keyboards.price_kb
     await bot.send_message(message.from_user.id, 'Выберите нужный вам вариант(на клавиатуре ниже):',
                            reply_markup=reply_kb)
 
 
 @dp.message_handler(commands=['email', 'почта'])
-async def start_email_command(message: types.message):
+async def start_email_command(message: types.Message):
     await types.ChatActions.typing()
     if not is_user_logged(message.from_user.id):
         await bot.send_message(message.from_user.id, str_phrases['send_me_email'],
@@ -215,7 +248,7 @@ async def start_email_command(message: types.message):
 
 
 @dp.message_handler(commands=['bind'])
-async def bind_command_start(message: types.message):
+async def bind_command_start(message: types.Message):
     msg_text = "В следующем сообщении выберите нужную криптовалюту:"
     reply_kb = keyboards.cryptos_kb
     await types.ChatActions.typing(3)
@@ -223,7 +256,7 @@ async def bind_command_start(message: types.message):
     await BindWallet.waiting_for_crypto.set()
 
 
-async def waiting_for_crypto_for_bind(message: types.message, state):
+async def waiting_for_crypto_for_bind(message: types.Message, state):
     chosen_crypto = message.text
     if chosen_crypto not in phrases.available_crypto:
         await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'])
@@ -242,7 +275,7 @@ async def waiting_for_crypto_for_bind(message: types.message, state):
     await BindWallet.waiting_for_variant.set()
 
 
-async def bind_again_or_no(message: types.message, state):
+async def bind_again_or_no(message: types.Message, state):
     if message.text.lower() not in ['да✔️', 'нет❌']:
         await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'])
     if message.text.lower() == 'да✔️':
@@ -255,7 +288,7 @@ async def bind_again_or_no(message: types.message, state):
         await state.finish()
 
 
-async def waiting_for_bind_variant(message: types.message, state):
+async def waiting_for_bind_variant(message: types.Message, state):
     if message.text not in phrases.available_variants:
         await bot.send_message(message.from_user.id,
                                'Пожалуйста, выбирайте из предложенных вариантов')
@@ -623,17 +656,21 @@ async def send_me_wallet(message: types.message, state):
         await BuyingState.next()
 
 
-async def finishing(message: types.message, state):
+async def finishing(message: types.Message, state):
     session = db_session.create_session()
     user = session.query(User).filter(User.id == message.from_user.id).first()
     user_email = user.email
-    wallet = message.text
     data = await state.get_data()
+    wallet = message.text
     chosen_crypto = data['chosen_crypto']
     chosen_amount = data['chosen_amount']
     tx_code = data['tx_code']
-    crypto_operations.send_transaction(chosen_crypto, wallet,
-                                       int(data['chosen_amount']))
+    if crypto_operations.check_crypto_wallet(chosen_crypto, wallet):
+        msg_text = ['Вероятно, вы допустили ошибку в адресе кошелька.',
+                    'Повторите попытку']
+        await bot.send_message(message.from_user.id, '\n'.join(msg_text))
+        return
+    crypto_operations.send_transaction(chosen_crypto, wallet, int(data['chosen_amount']))
     await bot.send_message(message.from_user.id, str_phrases['tx_sent'])
     email_operations.send_buy_info(user_email, tx_code, chosen_crypto, chosen_amount)
     await state.finish()
@@ -667,6 +704,8 @@ async def process_text(message):
         await account_operations(message)
     if message.text.lower() == 'операции с криптовалютами💲':
         await crypto_actions(message)
+    if message.text.lower() == 'проверить баланс кошелька💰':
+        await process_balance_command(message)
 
 
 def register_handlers_price(dispatcher):
@@ -706,11 +745,19 @@ def register_bind_handlers(dispatcher):
     dispatcher.register_message_handler(wallet_for_bind_sent, state=BindWallet.waiting_for_wallet)
 
 
+def register_balance_handlers(dispatcher):
+    dispatcher.register_message_handler(process_balance_command, commands="balance", state='*')
+    dispatcher.register_message_handler(crypto_for_balance_chosen,
+                                        state=CheckBalance.waiting_for_crypto)
+    dispatcher.register_message_handler(wallet_not_bound, state=CheckBalance.wallet_not_bound)
+
+
 if __name__ == '__main__':
     register_handlers_price(dp)
     register_mail_handlers(dp)
     register_graph_handlers(dp)
     register_buy_handlers(dp)
     register_bind_handlers(dp)
+    register_balance_handlers(dp)
     print('Bot is running now')
     executor.start_polling(dp)
