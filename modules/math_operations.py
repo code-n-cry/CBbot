@@ -86,22 +86,19 @@ class MathOperations:
         return self.converter.convert(usd_amount, 'USD', self.fiat)
 
     def process_five_year_period(self):
-        try:
-            price_lst = []
-            for year in self.date_lst:
-                average_for_year = 0
-                for date in year:
-                    scraper = CmcScraper(self.crypto, date, date)
-                    average_for_year += scraper.get_data()[1][0][1]
-                    if year != self.date_lst[-1]:
-                        average_for_year = round(average_for_year / 12, 2)
-                    else:
-                        average_for_year = round(average_for_year / datetime.date.today().month, 2)
-                price_lst.append(str(average_for_year))
-                year_lst = [i[0].split('-')[-1] for i in self.date_lst]
-            return year_lst, price_lst
-        except Exception as e:
-            logging.error(str(e) + ' Math')
+        price_lst = []
+        for year in self.date_lst:
+            average_for_year = 0
+            for date in year:
+                scraper = CmcScraper(self.crypto, date, date)
+                average_for_year += scraper.get_data()[1][0][1]
+                if year != self.date_lst[-1]:
+                    average_for_year = round(average_for_year / 12, 2)
+                else:
+                    average_for_year = round(average_for_year / datetime.date.today().month, 2)
+            price_lst.append(str(average_for_year))
+        year_lst = [i[0].split('-')[-1] for i in self.date_lst]
+        return year_lst, price_lst
 
     def process_year_period(self):
         price_lst = []
@@ -178,30 +175,27 @@ class MathOperations:
         fig.savefig(f'{self.img_name}.png')
 
     def main(self):
-        try:
-            self.str_periods_to_machine()
-            x, y = None, None
-            font_size = 8
-            if self.period == 'Пять лет':
-                x, y = self.process_five_year_period()
-            elif self.period == 'Год':
-                x, y = self.process_year_period()
-            elif self.period == 'Месяц':
-                font_size = 7
-                x, y = self.process_month_period()
-            elif self.period == 'Неделя':
-                self.period = 'неделю'
-                x, y = self.process_week_period()
-            if self.fiat != 'USD':
-                for amount in range(len(x)):
-                    y[amount] = self.convert_fiat_currency(y[amount])
-            name_x = f'Дата'
-            name_y = f'Курс {self.crypto} к {self.fiat}'
-            title = f'Изменения цены {self.crypto} к {self.fiat} за {self.period.lower()}'
-            self.build_plot(x, y, name_x, name_y, title, font_size)
-            self.date_lst.clear()
-        except Exception as e:
-            logging.error(str(e) + ' Math_main')
+        self.str_periods_to_machine()
+        x, y = None, None
+        font_size = 8
+        if self.period == 'Пять лет':
+            x, y = self.process_five_year_period()
+        elif self.period == 'Год':
+            x, y = self.process_year_period()
+        elif self.period == 'Месяц':
+            font_size = 7
+            x, y = self.process_month_period()
+        elif self.period == 'Неделя':
+            self.period = 'неделю'
+            x, y = self.process_week_period()
+        if self.fiat != 'USD':
+            for amount in range(len(x)):
+                y[amount] = self.convert_fiat_currency(y[amount])
+        name_x = f'Дата'
+        name_y = f'Курс {self.crypto} к {self.fiat}'
+        title = f'Изменения цены {self.crypto} к {self.fiat} за {self.period.lower()}'
+        self.build_plot(x, y, name_x, name_y, title, font_size)
+        self.date_lst.clear()
 
     def set_new_data(self, period: str, crypto: str, fiat: str, plot_img_name: str):
         self.period = period

@@ -5,7 +5,7 @@ import moneywagon
 import requests
 import keyboards
 import phrases
-from aiogram import Dispatcher, Bot, types, executor, md
+from aiogram import Dispatcher, Bot, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.types import ReplyKeyboardRemove, ParseMode
@@ -25,7 +25,7 @@ from modules.payment_operations import PaymentOperations
 from modules.email_operations import EmailOperations
 from states import *
 
-logging.info('DB initializing')
+
 db_session.initialization('db/all_data.sqlite')
 with open('static/json/phrases.json', encoding='utf-8') as phrases_json:
     all_data = json.load(phrases_json)
@@ -44,7 +44,6 @@ with open('static/json/general_bot_info.json', encoding='utf-8') as input_json:
     all_data = json.load(input_json)
     bot_email = all_data['Email']['email']
     bot_password = all_data['Email']['password']
-logging.info('Bot starting')
 bot = Bot(token=token)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
@@ -59,13 +58,12 @@ crypto_to_their_operations = {
 }
 qiwi_links_generator = PaymentOperations(qiwi_token, qiwi_phone)
 is_paying = False
-logging.basicConfig(filename='CBbot.log', format='%(asctime)s %(levelname)s %(name)s %(message)s')
-WEBHOOK_HOST = 'https://deploy-heroku-bot.herokuapp.com'
+WEBHOOK_HOST = 'https://641185f34a58.ngrok.io'
 WEBHOOK_PATH = '/webhook/'
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
-
+os.environ['PORT'] = '5000'
 WEBAPP_HOST = '0.0.0.0'
-WEBAPP_PORT = os.environ.get('PORT')
+WEBAPP_PORT = int(os.environ.get('PORT'))
 
 
 async def on_startup(dispatcher):
@@ -196,13 +194,13 @@ async def crypto_for_balance_chosen(message: types.Message, state):
     await state.update_data(chosen_crypto=chosen_crypto.lower())
     wallet = is_wallet_already_bound(phrases.cryptos_abbreviations[chosen_crypto],
                                      message.from_user.id)
+    await state.update_data(chosen_crypto=phrases.cryptos_abbreviations[chosen_crypto])
     if wallet:
         await state.update_data(need_wallet=wallet)
         await bot.send_message(message.from_user.id, str_phrases['use_bounded?'],
                                reply_markup=keyboards.yes_or_no_kb)
         await CheckBalance.wallet_is_bound.set()
     else:
-        await state.update_data(chosen_crypto=phrases.cryptos_abbreviations[chosen_crypto])
         await bot.send_message(message.from_user.id, str_phrases['send_wallet_next'],
                                reply_markup=ReplyKeyboardRemove())
         await CheckBalance.wallet_not_bound.set()
@@ -226,6 +224,7 @@ async def use_bounded_wallet(message: types.Message, state):
         msg_text = f'Баланс этого {chosen_crypto}-кошелька: {balance} {chosen_crypto}'
         await types.ChatActions.typing(2)
         await bot.send_message(message.from_user.id, msg_text, reply_markup=keyboards.main_kb)
+        await state.finish()
 
 
 async def wallet_not_bound(message: types.Message, state):
@@ -237,6 +236,7 @@ async def wallet_not_bound(message: types.Message, state):
         msg_text = f'Баланс этого {chosen_crypto}-кошелька: {balance} {chosen_crypto}'
         await types.ChatActions.typing(2)
         await bot.send_message(message.from_user.id, msg_text, reply_markup=keyboards.main_kb)
+        await state.finish()
     else:
         msg_text = ['Кошелёк не прошёл проверку на правильность', 'Вероятно, вы ошиблись']
         await types.ChatActions.typing(2)
@@ -770,6 +770,7 @@ def register_balance_handlers(dispatcher):
     dispatcher.register_message_handler(crypto_for_balance_chosen,
                                         state=CheckBalance.waiting_for_crypto)
     dispatcher.register_message_handler(wallet_not_bound, state=CheckBalance.wallet_not_bound)
+    dispatcher.register_message_handler(use_bounded_wallet, state=CheckBalance.wallet_is_bound)
 
 
 if __name__ == '__main__':
@@ -779,6 +780,5 @@ if __name__ == '__main__':
     register_buy_handlers(dp)
     register_bind_handlers(dp)
     register_balance_handlers(dp)
-    logging.info('Bot is now running')
     start_webhook(dispatcher=dp, webhook_path=WEBHOOK_PATH,
                   on_startup=on_startup, on_shutdown=on_shutdown, host=WEBAPP_HOST, port=WEBAPP_PORT)

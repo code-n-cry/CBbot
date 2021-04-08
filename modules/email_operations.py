@@ -19,7 +19,6 @@ class EmailOperations:
         self.sender = None
 
     def send_authorization_message(self, email_to: str, msg_text: str):
-        try:
             message = multipart.MIMEMultipart()
             message['From'] = self.email
             message['To'] = email_to
@@ -31,11 +30,9 @@ class EmailOperations:
             sleep(2.5)
             self.sender.send_message(message)
             self.sender.quit()
-        except Exception as e:
-            logging.error(str(e) + ' Auth', name='email')
+
 
     def send_buy_info(self, email_to: str, tx_code: str, crypto_currency: str, amount: int):
-        try:
             message = multipart.MIMEMultipart()
             message['From'] = self.email
             message['To'] = email_to
@@ -49,8 +46,6 @@ class EmailOperations:
             sleep(2.5)
             self.sender.send_message(message)
             self.sender.quit()
-        except Exception as e:
-            logging.error(str(e) + ' check', name='email')
 
     def verify_email(self, email: str, name: str):
         if validate_email(email, verify=True):
