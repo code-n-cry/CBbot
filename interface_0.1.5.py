@@ -5,11 +5,12 @@ import moneywagon
 import requests
 import keyboards
 import phrases
-from aiogram import Dispatcher, Bot, types, executor
+from aiogram import Dispatcher, Bot, types, executor, md
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.types import ReplyKeyboardRemove, ParseMode
 from aiogram.utils.markdown import bold
+from aiogram.utils.executor import start_webhook
 from exceptions import EmailDoesNotExists, InvalidAddress
 from smtplib import SMTPRecipientsRefused
 from time import sleep
@@ -24,7 +25,7 @@ from modules.payment_operations import PaymentOperations
 from modules.email_operations import EmailOperations
 from states import *
 
-print('DB initialization.....')
+logging.info('DB initializing')
 db_session.initialization('db/all_data.sqlite')
 with open('static/json/phrases.json', encoding='utf-8') as phrases_json:
     all_data = json.load(phrases_json)
@@ -43,7 +44,7 @@ with open('static/json/general_bot_info.json', encoding='utf-8') as input_json:
     all_data = json.load(input_json)
     bot_email = all_data['Email']['email']
     bot_password = all_data['Email']['password']
-print('Bot starting...')
+logging.info('Bot starting')
 bot = Bot(token=token)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
@@ -59,6 +60,20 @@ crypto_to_their_operations = {
 qiwi_links_generator = PaymentOperations(qiwi_token, qiwi_phone)
 is_paying = False
 logging.basicConfig(filename='CBbot.log', format='%(asctime)s %(levelname)s %(name)s %(message)s')
+WEBHOOK_HOST = 'https://deploy-heroku-bot.herokuapp.com'
+WEBHOOK_PATH = '/webhook/'
+WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
+
+WEBAPP_HOST = '0.0.0.0'
+WEBAPP_PORT = os.environ.get('PORT')
+
+
+async def on_startup(dispatcher):
+    await bot.set_webhook(WEBHOOK_URL)
+
+
+async def on_shutdown(dispatcher):
+    logging.info('Bot offline now')
 
 
 def is_user_logged(tg_user_id: int):
@@ -764,5 +779,6 @@ if __name__ == '__main__':
     register_buy_handlers(dp)
     register_bind_handlers(dp)
     register_balance_handlers(dp)
-    print('Bot is running now')
-    executor.start_polling(dp)
+    logging.info('Bot is now running')
+    start_webhook(dispatcher=dp, webhook_path=WEBHOOK_PATH,
+                  on_startup=on_startup, on_shutdown=on_shutdown, host=WEBAPP_HOST, port=WEBAPP_PORT)
