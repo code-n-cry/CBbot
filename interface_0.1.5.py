@@ -1,5 +1,6 @@
 import json
 import os
+import logging
 import moneywagon
 import requests
 import keyboards
@@ -57,6 +58,7 @@ crypto_to_their_operations = {
 }
 qiwi_links_generator = PaymentOperations(qiwi_token, qiwi_phone)
 is_paying = False
+logging.basicConfig(filename='CBbot.log', format='%(asctime)s %(levelname)s %(name)s %(message)s')
 
 
 def is_user_logged(tg_user_id: int):
@@ -396,6 +398,7 @@ async def code_sent(message, state):
                 new_user.email = email['email']
                 session.add(new_user)
                 session.commit()
+                logging.info(f'new user: {new_user.id}')
                 await types.ChatActions.typing()
                 await bot.send_message(message.from_user.id, '\n'.join(list_phrases['code_success']),
                                        reply_markup=keyboards.main_kb)
@@ -414,6 +417,7 @@ async def code_sent(message, state):
                                    reply_markup=keyboards.newbie_kb)
             await state.finish()
     except ValueError:
+        logging.warning('Bad Email', name='interface')
         await types.ChatActions.typing()
         await bot.send_message(message.from_user.id, str_phrases['invalid_email'],
                                reply_markup=keyboards.newbie_kb)
@@ -606,6 +610,7 @@ async def generating_code(message: types.message, state):
         await bot.send_message(message.from_user.id, msg, reply_markup=keyboards.payment_kb)
         await BuyingState.next()
     except ValueError:
+        logging.warning('Bad code', name='interface')
         await types.ChatActions.typing(2)
         await bot.send_message(message.from_user.id, str_phrases['just_number'])
         return
