@@ -12,8 +12,6 @@ class EmailOperations:
     водится сон в течение 2.5 секунд, чтобы уменьшить вероятность попадания в спам"""
 
     def __init__(self, email: str, password: str):
-        logging.basicConfig(filename='email.log',
-                            format='%(asctime)s %(levelname)s %(name)s %(message)s')
         self.email = email
         self.password = password
         self.sender = None

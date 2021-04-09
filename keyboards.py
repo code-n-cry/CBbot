@@ -19,11 +19,12 @@ button_help = InlineKeyboardButton('Вызвать помощь', callback_data=
 help_kb = InlineKeyboardMarkup().add(button_help)
 """Payment operations"""
 crypto_operations = KeyboardButton('Операции с криптовалютами💲')
-buy_button = KeyboardButton('Купить криптовалюту💸')
+buy_button = KeyboardButton('Купить криптовалюту💳')
 balance_button = KeyboardButton('Проверить баланс кошелька💰')
+tx_button = KeyboardButton('Отправить крипто-транзакцию💸')
 payment_button = KeyboardButton('Оплачено')
 available_crypto_operations = ReplyKeyboardMarkup(resize_keyboard=True).row(buy_button).row(
-    balance_button)
+    balance_button).row(tx_button)
 payment_kb = ReplyKeyboardMarkup(resize_keyboard=True).add(payment_button)
 """Price info operations"""
 price_operations = KeyboardButton('Узнать о стоимости криптовалют💱')
@@ -37,6 +38,7 @@ main_kb = newbie_kb
 main_kb.row(crypto_operations)
 """Keyboards with choose"""
 cryptos_kb = ReplyKeyboardMarkup(resize_keyboard=True)  # клавиатура для выбора криптовалюты
+tx_kb = ReplyKeyboardMarkup(resize_keyboard=True)
 for currency in available_crypto:
     button = KeyboardButton(currency)
     cryptos_kb.add(button)
@@ -49,6 +51,9 @@ periods_kb = ReplyKeyboardMarkup(resize_keyboard=True)  # клавиатура �
 for period in available_periods:
     button = KeyboardButton(period)
     periods_kb.row(button)
+for currency in available_crypto[:-1]:
+    button = KeyboardButton(currency)
+    tx_kb.row(button)
 """Yes or no keyboard"""
 yes_button = KeyboardButton('Да✔️')
 no_button = KeyboardButton('Нет❌')

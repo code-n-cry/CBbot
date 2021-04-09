@@ -3,6 +3,7 @@ import os
 import logging
 import moneywagon
 import requests
+from aiogram.utils import executor
 import keyboards
 import phrases
 from aiogram import Dispatcher, Bot, types
@@ -10,8 +11,8 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.types import ReplyKeyboardRemove, ParseMode
 from aiogram.utils.markdown import bold
-from aiogram.utils.executor import start_webhook
-from exceptions import EmailDoesNotExists, InvalidAddress
+import aiogram
+from exceptions import *
 from smtplib import SMTPRecipientsRefused
 from time import sleep
 from emoji import emojize
@@ -24,7 +25,6 @@ from modules.crypto_operations import CryptoOperating
 from modules.payment_operations import PaymentOperations
 from modules.email_operations import EmailOperations
 from states import *
-
 
 db_session.initialization('db/all_data.sqlite')
 with open('static/json/phrases.json', encoding='utf-8') as phrases_json:
@@ -44,6 +44,7 @@ with open('static/json/general_bot_info.json', encoding='utf-8') as input_json:
     all_data = json.load(input_json)
     bot_email = all_data['Email']['email']
     bot_password = all_data['Email']['password']
+
 bot = Bot(token=token)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
@@ -58,22 +59,9 @@ crypto_to_their_operations = {
 }
 qiwi_links_generator = PaymentOperations(qiwi_token, qiwi_phone)
 is_paying = False
-WEBHOOK_HOST = 'https://641185f34a58.ngrok.io'
-WEBHOOK_PATH = '/webhook/'
-WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
-os.environ['PORT'] = '5000'
-WEBAPP_HOST = '0.0.0.0'
-WEBAPP_PORT = int(os.environ.get('PORT'))
 
 
-async def on_startup(dispatcher):
-    await bot.set_webhook(WEBHOOK_URL)
-
-
-async def on_shutdown(dispatcher):
-    logging.info('Bot offline now')
-
-
+# Функции для проверки статуса пользователя в системе"""
 def is_user_logged(tg_user_id: int):
     session = db_session.create_session()
     check = session.query(User).get(tg_user_id)
@@ -91,6 +79,7 @@ def is_wallet_already_bound(crypto_abbreviation: str, tg_user_id: int) -> str:
     return ''
 
 
+# Стартовая команда
 @dp.message_handler(commands=['start'])
 async def process_start_command(message: types.message):
     name = message.from_user.first_name
@@ -98,16 +87,7 @@ async def process_start_command(message: types.message):
                            reply_markup=keyboards.help_kb)
 
 
-@dp.message_handler(commands=['account'])
-async def account_operations(message):
-    reply_kb = keyboards.not_logged_kb
-    msg_text = str_phrases['not_logged']
-    if is_user_logged(message.from_user.id):
-        reply_kb = keyboards.logged_kb
-        msg_text = str_phrases['is_logged']
-    await bot.send_message(message.from_user.id, msg_text, reply_markup=reply_kb)
-
-
+# Команда "помощь" и кнопки для неё
 @dp.callback_query_handler(lambda call: True)
 async def process_callbacks(call):
     if call.data == 'help':
@@ -129,24 +109,15 @@ async def process_help_command(message: types.message):
                            reply_markup=reply_markup)
 
 
-@dp.message_handler(commands=['crypto'])
-async def crypto_actions(message):
+# операции, связанные с аккаунтном
+@dp.message_handler(commands=['account'])
+async def account_operations(message):
+    reply_kb = keyboards.not_logged_kb
+    msg_text = str_phrases['not_logged']
     if is_user_logged(message.from_user.id):
-        await bot.send_message(message.from_user.id,
-                               'Сейчас в нашей системе доступны такие операции(на клавиатуре):',
-                               reply_markup=keyboards.available_crypto_operations)
-        return
-    await bot.send_message(message.from_user.id, str_phrases['u_need_account'])
-
-
-@dp.message_handler(commands=['create', 'создать'])
-async def process_create_command(message: types.message):
-    await types.ChatActions.typing()
-    if is_user_logged(message.from_user.id):
-        await bot.send_message(message.from_user.id, str_phrases['already_registered'])
-    else:
-        await bot.send_message(message.from_user.id, '\n'.join(list_phrases['creating_msg']),
-                               reply_markup=keyboards.email_kb)
+        reply_kb = keyboards.logged_kb
+        msg_text = str_phrases['is_logged']
+    await bot.send_message(message.from_user.id, msg_text, reply_markup=reply_kb)
 
 
 @dp.message_handler(commands=['инфо', 'info'])
@@ -172,84 +143,14 @@ async def process_account_command(message: types.message):
                                reply_markup=keyboards.newbie_kb)
 
 
-@dp.message_handler(commands=['balance', 'баланс'])
-async def process_balance_command(message: types.message):
+@dp.message_handler(commands=['create', 'создать'])
+async def process_create_command(message: types.message):
+    await types.ChatActions.typing()
     if is_user_logged(message.from_user.id):
-        await types.ChatActions.typing(3)
-        await bot.send_message(message.from_user.id, str_phrases['choose_currency'],
-                               reply_markup=keyboards.cryptos_kb)
-        await CheckBalance.waiting_for_crypto.set()
+        await bot.send_message(message.from_user.id, str_phrases['already_registered'])
     else:
-        await types.ChatActions.typing(2)
-        await bot.send_message(message.from_user.id, str_phrases['u_need_account'],
-                               reply_markup=keyboards.newbie_kb)
-
-
-async def crypto_for_balance_chosen(message: types.Message, state):
-    chosen_crypto = message.text
-    if chosen_crypto not in phrases.available_crypto:
-        await types.ChatActions.typing(3)
-        await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'])
-        return
-    await state.update_data(chosen_crypto=chosen_crypto.lower())
-    wallet = is_wallet_already_bound(phrases.cryptos_abbreviations[chosen_crypto],
-                                     message.from_user.id)
-    await state.update_data(chosen_crypto=phrases.cryptos_abbreviations[chosen_crypto])
-    if wallet:
-        await state.update_data(need_wallet=wallet)
-        await bot.send_message(message.from_user.id, str_phrases['use_bounded?'],
-                               reply_markup=keyboards.yes_or_no_kb)
-        await CheckBalance.wallet_is_bound.set()
-    else:
-        await bot.send_message(message.from_user.id, str_phrases['send_wallet_next'],
-                               reply_markup=ReplyKeyboardRemove())
-        await CheckBalance.wallet_not_bound.set()
-
-
-async def use_bounded_wallet(message: types.Message, state):
-    if message.text not in ['Да✔️', 'Нет❌']:
-        await bot.send_message(message.from_user.id,
-                               'Пожалуйста, выберите из вариантов на клавиатуре',
-                               reply_markup=keyboards.yes_or_no_kb)
-        return
-    if message.text == 'Нет❌':
-        await bot.send_message(message.from_user.id, 'Хорошо, тогда отправьте нужный Вам адрес:',
-                               reply_markup=ReplyKeyboardRemove())
-        await CheckBalance.wallet_not_bound.set()
-    if message.text == 'Да✔️':
-        data = await state.get_data()
-        wallet = data['need_wallet']
-        chosen_crypto = data['chosen_crypto']
-        balance = crypto_operations.check_crypto_wallet(chosen_crypto, wallet)
-        msg_text = f'Баланс этого {chosen_crypto}-кошелька: {balance} {chosen_crypto}'
-        await types.ChatActions.typing(2)
-        await bot.send_message(message.from_user.id, msg_text, reply_markup=keyboards.main_kb)
-        await state.finish()
-
-
-async def wallet_not_bound(message: types.Message, state):
-    wallet = message.text
-    state_data = await state.get_data()
-    chosen_crypto = state_data['chosen_crypto']
-    if crypto_operations.check_crypto_wallet(chosen_crypto, wallet):
-        balance = crypto_operations.check_crypto_wallet(chosen_crypto, wallet)
-        msg_text = f'Баланс этого {chosen_crypto}-кошелька: {balance} {chosen_crypto}'
-        await types.ChatActions.typing(2)
-        await bot.send_message(message.from_user.id, msg_text, reply_markup=keyboards.main_kb)
-        await state.finish()
-    else:
-        msg_text = ['Кошелёк не прошёл проверку на правильность', 'Вероятно, вы ошиблись']
-        await types.ChatActions.typing(2)
-        await bot.send_message(message.from_user.id, '\n'.join(msg_text),
-                               reply_markup=keyboards.main_kb)
-        await state.finish()
-
-
-@dp.message_handler(commands=['price_operations'])
-async def price_operations(message: types.Message):
-    reply_kb = keyboards.price_kb
-    await bot.send_message(message.from_user.id, 'Выберите нужный вам вариант(на клавиатуре ниже):',
-                           reply_markup=reply_kb)
+        await bot.send_message(message.from_user.id, '\n'.join(list_phrases['creating_msg']),
+                               reply_markup=keyboards.email_kb)
 
 
 @dp.message_handler(commands=['email', 'почта'])
@@ -262,104 +163,6 @@ async def start_email_command(message: types.Message):
     else:
         await types.ChatActions.typing(2)
         await bot.send_message(message.from_user.id, str_phrases['already_registered'])
-
-
-@dp.message_handler(commands=['bind'])
-async def bind_command_start(message: types.Message):
-    msg_text = "В следующем сообщении выберите нужную криптовалюту:"
-    reply_kb = keyboards.cryptos_kb
-    await types.ChatActions.typing(3)
-    await bot.send_message(message.from_user.id, msg_text, reply_markup=reply_kb)
-    await BindWallet.waiting_for_crypto.set()
-
-
-async def waiting_for_crypto_for_bind(message: types.Message, state):
-    chosen_crypto = message.text
-    if chosen_crypto not in phrases.available_crypto:
-        await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'])
-        return
-    crypto_abbreviation = phrases.cryptos_abbreviations[chosen_crypto]
-    await types.ChatActions.typing(3)
-    await state.update_data(chosen_crypto=crypto_abbreviation)
-    if is_wallet_already_bound(crypto_abbreviation, message.from_user.id):
-        await bot.send_message(message.from_user.id,
-                               phrases.wallet_already_bound(crypto_abbreviation),
-                               reply_markup=keyboards.yes_or_no_kb)
-        await BindWallet.next()
-        return
-    await bot.send_message(message.from_user.id, str_phrases['send_wallet_variant'],
-                           reply_markup=keyboards.variants_kb)
-    await BindWallet.waiting_for_variant.set()
-
-
-async def bind_again_or_no(message: types.Message, state):
-    if message.text.lower() not in ['да✔️', 'нет❌']:
-        await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'])
-    if message.text.lower() == 'да✔️':
-        await bot.send_message(message.from_user.id, str_phrases['send_wallet_variant'],
-                               reply_markup=keyboards.variants_kb)
-        await BindWallet.next()
-    if message.text.lower() == 'нет❌':
-        await bot.send_message(message.from_user.id, 'Операция отменена',
-                               reply_markup=keyboards.main_kb)
-        await state.finish()
-
-
-async def waiting_for_bind_variant(message: types.Message, state):
-    if message.text not in phrases.available_variants:
-        await bot.send_message(message.from_user.id,
-                               'Пожалуйста, выбирайте из предложенных вариантов')
-        return
-    chosen_variant = message.text
-    state_data = await state.get_data()
-    if chosen_variant == phrases.available_variants[0]:
-        # если пользователь хочет сгенерировать кошелёк себе
-        abbreviation_to_function = {
-            'BTC': crypto_operations.generate_bitcoin_wallet,
-            'LTC': crypto_operations.generate_litecoin_wallet,
-            'DOGE': crypto_operations.generate_dogecoin_wallet,
-            'ETH': crypto_operations.generate_eth_wallet
-        }
-        address, private = abbreviation_to_function[state_data['chosen_crypto']]()
-        await bot.send_message(message.from_user.id,
-                               phrases.wallet_info(address, private,
-                                                   state_data['chosen_crypto']),
-                               reply_markup=keyboards.main_kb, parse_mode=ParseMode.MARKDOWN)
-        session = db_session.create_session()
-        current_user = session.query(User).filter(User.id == message.from_user.id).first()
-        exec(
-            f'current_user.{phrases.abbreviations_to_crypto[state_data["chosen_crypto"]]}_wallet="{address}"')
-        # выше конструкция для занесения в базу данных адреса кошелька,
-        # т.к. удобнее способа мы не нашли, данные добавляются через форматированную строку
-        session.add(current_user)
-        session.commit()
-        await state.finish()
-
-    else:
-        await bot.send_message(message.from_user.id,
-                               f'Хорошо, теперь пришлите адрес {state_data["chosen_crypto"]}-кошелька:',
-                               reply_markup=ReplyKeyboardRemove())
-        await BindWallet.next()
-
-
-async def wallet_for_bind_sent(message: types.Message, state):
-    try:
-        address = message.text
-        state_data = await state.get_data()
-        if crypto_operations.check_crypto_wallet(state_data['chosen_crypto'], address):
-            await bot.send_message(message.from_user.id, str_phrases['wallet_ok'],
-                                   reply_markup=keyboards.main_kb)
-            session = db_session.create_session()
-            current_user = session.query(User).filter(User.id == message.from_user.id).first()
-            exec(
-                f'current_user.{phrases.abbreviations_to_crypto[state_data["chosen_crypto"]]}_wallet="{address}"')
-            session.add(current_user)
-            session.commit()
-            await state.finish()
-    except InvalidAddress:
-        await bot.send_message(message.from_user.id, str_phrases['invalid_wallet'],
-                               reply_markup=keyboards.main_kb)
-        await state.finish()
 
 
 async def email_sent(message, state):
@@ -437,6 +240,195 @@ async def code_sent(message, state):
         await bot.send_message(message.from_user.id, str_phrases['invalid_email'],
                                reply_markup=keyboards.newbie_kb)
         await state.finish()
+
+
+@dp.message_handler(commands=['bind'])
+async def bind_command_start(message: types.Message):
+    msg_text = "В следующем сообщении выберите нужную криптовалюту:"
+    reply_kb = keyboards.cryptos_kb
+    await types.ChatActions.typing(3)
+    await bot.send_message(message.from_user.id, msg_text, reply_markup=reply_kb)
+    await BindWallet.waiting_for_crypto.set()
+
+
+async def waiting_for_crypto_for_bind(message: types.Message, state):
+    chosen_crypto = message.text
+    if chosen_crypto not in phrases.available_crypto:
+        await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'])
+        return
+    crypto_abbreviation = phrases.cryptos_abbreviations[chosen_crypto]
+    await types.ChatActions.typing(3)
+    await state.update_data(chosen_crypto=crypto_abbreviation)
+    if is_wallet_already_bound(crypto_abbreviation, message.from_user.id):
+        await bot.send_message(message.from_user.id,
+                               phrases.wallet_already_bound(crypto_abbreviation),
+                               reply_markup=keyboards.yes_or_no_kb)
+        await BindWallet.next()
+        return
+    await bot.send_message(message.from_user.id, str_phrases['send_wallet_variant'],
+                           reply_markup=keyboards.variants_kb)
+    await BindWallet.waiting_for_variant.set()
+
+
+async def bind_again_or_no(message: types.Message, state):
+    if message.text.lower() not in phrases.available_variants2:
+        await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'])
+    if message.text.lower() == 'да✔️':
+        await bot.send_message(message.from_user.id, str_phrases['send_wallet_variant'],
+                               reply_markup=keyboards.variants_kb)
+        await BindWallet.next()
+    if message.text.lower() == 'нет❌':
+        await bot.send_message(message.from_user.id, 'Операция отменена',
+                               reply_markup=keyboards.main_kb)
+        await state.finish()
+
+
+async def waiting_for_bind_variant(message: types.Message, state):
+    if message.text not in phrases.available_variants:
+        await bot.send_message(message.from_user.id,
+                               'Пожалуйста, выбирайте из предложенных вариантов')
+        return
+    chosen_variant = message.text
+    state_data = await state.get_data()
+    if chosen_variant == phrases.available_variants[0]:
+        # если пользователь хочет сгенерировать кошелёк себе
+        abbreviation_to_function = {
+            'BTC': crypto_operations.generate_bitcoin_wallet,
+            'LTC': crypto_operations.generate_litecoin_wallet,
+            'DOGE': crypto_operations.generate_dogecoin_wallet,
+            'ETH': crypto_operations.generate_eth_wallet
+        }
+        address, private = abbreviation_to_function[state_data['chosen_crypto']]()
+        await bot.send_message(message.from_user.id,
+                               phrases.wallet_info(address, private,
+                                                   state_data['chosen_crypto']),
+                               reply_markup=keyboards.main_kb, parse_mode=ParseMode.MARKDOWN)
+        session = db_session.create_session()
+        current_user = session.query(User).filter(User.id == message.from_user.id).first()
+        exec(
+            f'current_user.{phrases.abbreviations_to_crypto[state_data["chosen_crypto"]]}_wallet="{address}"')
+        # выше конструкция для занесения в базу данных адреса кошелька,
+        # т.к. удобнее способа мы не нашли, данные добавляются через форматированную строку
+        session.add(current_user)
+        session.commit()
+        await state.finish()
+
+    else:
+        await bot.send_message(message.from_user.id,
+                               f'Хорошо, теперь пришлите адрес {state_data["chosen_crypto"]}-кошелька:',
+                               reply_markup=ReplyKeyboardRemove())
+        await BindWallet.next()
+
+
+async def wallet_for_bind_sent(message: types.Message, state):
+    try:
+        address = message.text
+        state_data = await state.get_data()
+        if crypto_operations.check_crypto_wallet(state_data['chosen_crypto'], address):
+            await bot.send_message(message.from_user.id, str_phrases['wallet_ok'],
+                                   reply_markup=keyboards.main_kb)
+            session = db_session.create_session()
+            current_user = session.query(User).filter(User.id == message.from_user.id).first()
+            exec(
+                f'current_user.{phrases.abbreviations_to_crypto[state_data["chosen_crypto"]]}_wallet="{address}"')
+            session.add(current_user)
+            session.commit()
+            await state.finish()
+    except InvalidAddress:
+        await bot.send_message(message.from_user.id, str_phrases['invalid_wallet'],
+                               reply_markup=keyboards.main_kb)
+        await state.finish()
+
+
+# операции с криптовалютами
+@dp.message_handler(commands=['crypto'])
+async def crypto_actions(message):
+    if is_user_logged(message.from_user.id):
+        await bot.send_message(message.from_user.id,
+                               'Сейчас в нашей системе доступны такие операции(на клавиатуре):',
+                               reply_markup=keyboards.available_crypto_operations)
+        return
+    await bot.send_message(message.from_user.id, str_phrases['u_need_account'])
+
+
+@dp.message_handler(commands=['balance', 'баланс'])
+async def process_balance_command(message: types.message):
+    if is_user_logged(message.from_user.id):
+        await types.ChatActions.typing(3)
+        await bot.send_message(message.from_user.id, str_phrases['choose_currency'],
+                               reply_markup=keyboards.cryptos_kb)
+        await CheckBalance.waiting_for_crypto.set()
+    else:
+        await types.ChatActions.typing(2)
+        await bot.send_message(message.from_user.id, str_phrases['u_need_account'],
+                               reply_markup=keyboards.newbie_kb)
+
+
+async def crypto_for_balance_chosen(message: types.Message, state: aiogram.dispatcher.filters.state):
+    chosen_crypto = message.text
+    if chosen_crypto not in phrases.available_crypto:
+        await types.ChatActions.typing(3)
+        await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'])
+        return
+    await state.update_data(chosen_crypto=chosen_crypto.lower())
+    wallet = is_wallet_already_bound(phrases.cryptos_abbreviations[chosen_crypto],
+                                     message.from_user.id)
+    await state.update_data(chosen_crypto=phrases.cryptos_abbreviations[chosen_crypto])
+    if wallet:
+        await state.update_data(need_wallet=wallet)
+        await bot.send_message(message.from_user.id, str_phrases['use_bounded?'],
+                               reply_markup=keyboards.yes_or_no_kb)
+        await CheckBalance.wallet_is_bound.set()
+    else:
+        await bot.send_message(message.from_user.id, str_phrases['send_wallet_next'],
+                               reply_markup=ReplyKeyboardRemove())
+        await CheckBalance.wallet_not_bound.set()
+
+
+async def use_bounded_wallet(message: types.Message, state: aiogram.dispatcher.filters.state):
+    if message.text.lower() not in phrases.available_variants2:
+        await bot.send_message(message.from_user.id,
+                               'Пожалуйста, выберите из вариантов на клавиатуре',
+                               reply_markup=keyboards.yes_or_no_kb)
+        return
+    if message.text == 'Нет❌':
+        await bot.send_message(message.from_user.id, 'Хорошо, тогда отправьте нужный Вам адрес:',
+                               reply_markup=ReplyKeyboardRemove())
+        await CheckBalance.wallet_not_bound.set()
+    if message.text == 'Да✔️':
+        data = await state.get_data()
+        wallet = data['need_wallet']
+        chosen_crypto = data['chosen_crypto']
+        balance = crypto_operations.check_crypto_wallet(chosen_crypto, wallet)
+        msg_text = f'Баланс этого {chosen_crypto}-кошелька: {balance} {chosen_crypto}'
+        await types.ChatActions.typing(2)
+        await bot.send_message(message.from_user.id, msg_text, reply_markup=keyboards.main_kb)
+        await state.finish()
+
+
+async def wallet_not_bound(message: types.Message, state):
+    wallet = message.text
+    state_data = await state.get_data()
+    chosen_crypto = state_data['chosen_crypto']
+    if crypto_operations.check_crypto_wallet(chosen_crypto, wallet):
+        balance = crypto_operations.check_crypto_wallet(chosen_crypto, wallet)
+        msg_text = f'Баланс этого {chosen_crypto}-кошелька: {balance} {chosen_crypto}'
+        await types.ChatActions.typing(2)
+        await bot.send_message(message.from_user.id, msg_text, reply_markup=keyboards.main_kb)
+        await state.finish()
+    else:
+        msg_text = ['Кошелёк не прошёл проверку на правильность', 'Вероятно, вы ошиблись']
+        await types.ChatActions.typing(2)
+        await bot.send_message(message.from_user.id, '\n'.join(msg_text),
+                               reply_markup=keyboards.main_kb)
+        await state.finish()
+
+
+@dp.message_handler(commands=['price_operations'])
+async def price_operations(message: types.Message):
+    reply_kb = keyboards.price_kb
+    await bot.send_message(message.from_user.id, 'Выберите нужный вам вариант(на клавиатуре ниже):',
+                           reply_markup=reply_kb)
 
 
 @dp.message_handler(commands=['price', 'курс'])
@@ -696,6 +688,76 @@ async def finishing(message: types.Message, state):
     await state.finish()
 
 
+@dp.message_handler(commands=['transactions'])
+async def process_transaction_command(message: types.Message):
+    user_id = message.from_user.id
+    if is_user_logged(user_id):
+        await bot.send_message(user_id, str_phrases['choose_currency_for_tx'],
+                               reply_markup=keyboards.tx_kb)
+        await SendTransaction.waiting_for_crypto.set()
+    else:
+        await bot.send_message(user_id, str_phrases['u_need_account'],
+                               reply_markup=keyboards.newbie_kb)
+
+
+async def crypto_for_transaction_chosen(message: types.Message, state):
+    chosen_crypto = message.text
+    user_id = message.from_user.id
+    if chosen_crypto not in phrases.available_crypto[:-1]:
+        await bot.send_message(user_id, str_phrases['choose_available'])
+        return
+    await state.update_data(chosen_crypto=phrases.cryptos_abbreviations[chosen_crypto])
+    await bot.send_message(user_id, str_phrases['send_secret_key_next'])
+    await SendTransaction.waiting_for_secret_key.set()
+
+
+async def private_key_sent(message: types.Message, state):
+    user_id = message.from_user.id
+    private_key = message.text
+    await state.update_data(private_key=private_key)
+    await bot.send_message(user_id, str_phrases['send_amount'], reply_markup=ReplyKeyboardRemove())
+    await SendTransaction.waiting_for_amount.set()
+
+
+async def amount_sent(message: types.Message, state):
+    user_id = message.from_user.id
+    try:
+        amount = float(message.text)
+        if amount <= 0:
+            raise AmountError
+        await state.update_date(chosen_amount=amount)
+        await bot.send_message(user_id, str_phrases['send_wallet_for_tx'],
+                               reply_markup=ReplyKeyboardRemove())
+    except ValueError:
+        await bot.send_message(user_id, str_phrases['just_number'], reply_markup=keyboards.main_kb)
+        await state.finish()
+    except AmountError:
+        await bot.send_message(user_id, str_phrases['invalid_amount'],
+                               reply_markup=keyboards.main_kb)
+        await state.finish()
+
+
+async def wallet_sent(message: types.Message, state):
+    user_id = message.from_user.id
+    try:
+        state_data = await state.get_data()
+        chosen_crypto = state_data['chosen_crypto']
+        chosen_amount = state_data['chosen_amount']
+        private_key = state_data['private_key']
+        wallet = message.text
+        crypto_operations.check_crypto_wallet(chosen_crypto, wallet)
+        crypto_operations.send_transaction(chosen_crypto, wallet, chosen_amount,
+                                           private_key=private_key)
+    except InvalidAddress:
+        await bot.send_message(user_id, state['invalid_wallet'], reply_markup=keyboards.main_kb)
+        await state.finish()
+    except AssertionError:
+        await bot.send_message(user_id, str_phrases['invalid_private_key'])
+    except Exception:
+        await bot.send_message(user_id, str_phrases['bad_tx'])
+
+
+# привязка текста к операциям
 @dp.message_handler()
 async def process_text(message):
     """Делаем так, чтобы комманды были доступны с помощью клавиатуры и обычных фраз, а не только
@@ -718,7 +780,7 @@ async def process_text(message):
         await start_email_command(message)
     if message.text.lower() == 'график стоимости📈':
         await start_graph_command(message)
-    if message.text.lower() == 'купить криптовалюту💸':
+    if message.text.lower() == 'купить криптовалюту💳':
         await start_buying_command(message)
     if message.text.lower() == 'операции с аккаунтом🧾':
         await account_operations(message)
@@ -726,8 +788,11 @@ async def process_text(message):
         await crypto_actions(message)
     if message.text.lower() == 'проверить баланс кошелька💰':
         await process_balance_command(message)
+    if message.text.lower() == 'отправить крипто-транзакцию💸':
+        await process_transaction_command(message)
 
 
+# связываем функции и классы из файла states.py для ведения диалогов
 def register_handlers_price(dispatcher):
     dispatcher.register_message_handler(start_price_command, commands="price", state='*')
     dispatcher.register_message_handler(crypto_chosen, state=GetPrice.waiting_for_crypto)
@@ -780,5 +845,4 @@ if __name__ == '__main__':
     register_buy_handlers(dp)
     register_bind_handlers(dp)
     register_balance_handlers(dp)
-    start_webhook(dispatcher=dp, webhook_path=WEBHOOK_PATH,
-                  on_startup=on_startup, on_shutdown=on_shutdown, host=WEBAPP_HOST, port=WEBAPP_PORT)
+    executor.start_polling(dp)

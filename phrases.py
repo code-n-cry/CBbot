@@ -43,11 +43,12 @@ def wallet_already_bound(crypto_abbreviation: str):
     return '\n'.join(msg_text)
 
 
-available_crypto = ['Bitcoin', 'Litecoin', 'Ethereum', 'Dogecoin']
+available_crypto = ['Bitcoin', 'Litecoin', 'Dogecoin', 'Ethereum']
 available_fiat = ['рубль', 'доллар сша', 'евро']
 available_periods = ['Неделя', 'Месяц', 'Год', 'Пять лет']
 fiats_for_buttons = ['Рубль', 'Доллар США', 'Евро']
 available_variants = ['Хочу сгенерировать себе кошелёк🖨️', 'Хочу привязать собственный📝']
+available_variants2 = ['да✔️', 'нет❌']
 cryptos_abbreviations = {
     'Bitcoin': 'BTC',
     'Ethereum': 'ETH',

@@ -1,13 +1,10 @@
 import matplotlib.pyplot as plt
 import datetime
 import json
-import logging
 from currency_converter import CurrencyConverter
 from calendar import monthrange
 import pymorphy2
 from cryptocmd import CmcScraper
-
-logging.basicConfig(filename='math.log', format='%(asctime)s %(levelname)s %(name)s %(message)s')
 
 
 class MathOperations:

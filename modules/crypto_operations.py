@@ -1,6 +1,8 @@
 from blockcypher import *
 import json
 import os
+import pandas
+from bs4 import BeautifulSoup
 import requests
 from cryptos import *
 from pywallet import wallet
@@ -69,23 +71,20 @@ class CryptoOperating:
         }
         return balance_keys[crypto_abbreviation]
 
-    def send_bitcoins(self, to_public_address: str, amount: int):
+    def send_bitcoins(self, private_key: str, to_public_address: str, amount: int):
         amount_to_satoshi = amount * 100000000
-        private_key = self.private_keys['BTC']
         tx = simple_spend(private_key, to_public_address, amount_to_satoshi, coin_symbol='btc',
                           api_key=self.token, privkey_is_compressed=False)
         return tx
 
-    def send_ltc(self, to_public_address: str, amount: int):
+    def send_ltc(self, private_key: str, to_public_address: str, amount: int):
         amount_to_satoshi = amount * 100000000
-        private_key = self.private_keys['LTC']
         tx = simple_spend(private_key, to_public_address, amount_to_satoshi, coin_symbol='ltc',
                           api_key=self.token, privkey_is_compressed=False)
         return tx
 
-    def send_doges(self, to_public_address: str, amount: int):
+    def send_doges(self, private_key: str, to_public_address: str, amount: int):
         amount_to_satoshi = amount * 100000000
-        private_key = self.private_keys['DOGE']
         tx = simple_spend(private_key, to_public_address, amount_to_satoshi, coin_symbol='doge',
                           api_key=self.token,
                           privkey_is_compressed=False)  # tx-сокращение от transaction
@@ -97,5 +96,11 @@ class CryptoOperating:
         balance = all_data['balance']
         return balance / 100000000
 
-    def send_transaction(self, crypto_abbreviation: str, address_send_to: str, amount: int):
-        self.abbreviation_to_tx_function[crypto_abbreviation](address_send_to, amount)
+    def send_transaction(self, crypto_abbreviation: str, address_send_to: str, amount: int,
+                         private_key=False):
+        if not private_key:
+            self.abbreviation_to_tx_function[crypto_abbreviation](
+                self.private_keys[crypto_abbreviation], address_send_to, amount)
+        else:
+            self.abbreviation_to_tx_function[crypto_abbreviation](private_key, address_send_to,
+                                                                  amount)

@@ -4,3 +4,7 @@ class EmailDoesNotExists(Exception):
 
 class InvalidAddress(Exception):
     pass
+
+
+class AmountError(Exception):
+    pass

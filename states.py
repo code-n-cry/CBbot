@@ -36,3 +36,10 @@ class CheckBalance(StatesGroup):
     wallet_is_bound = State()
     use_users_wallet = State()
     wallet_not_bound = State()
+
+
+class SendTransaction(StatesGroup):
+    waiting_for_crypto = State()
+    waiting_for_secret_key = State()
+    waiting_for_amount = State()
+    waiting_for_wallet_to_send = State()
