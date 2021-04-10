@@ -2,13 +2,9 @@ class EmailDoesNotExists(Exception):
     pass
 
 
-class WrongPhoneLength(Exception):
+class InvalidAddress(Exception):
     pass
 
 
-class PhoneNotRussian(Exception):
-    pass
-
-
-class SomeTextInThePhone(Exception):
+class AmountError(Exception):
     pass

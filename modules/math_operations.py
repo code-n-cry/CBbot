@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import datetime
 import json
-import os
 from currency_converter import CurrencyConverter
 from calendar import monthrange
 import pymorphy2
@@ -12,7 +11,8 @@ class MathOperations:
     def __init__(self, period: str, crypto: str, fiat: str, plot_img_name: str):
         self.morph = pymorphy2.MorphAnalyzer()
         self.converter = CurrencyConverter()
-        with open(os.getcwd() + '\\static\\json\\month_names.json', encoding='utf-8') as json_names:
+        with open('static/json/month_names.json',
+                  encoding='utf-8') as json_names:
             self.month_names = json.load(json_names)['Months']
         self.date_lst = []
         self.period = period
@@ -65,7 +65,7 @@ class MathOperations:
             if date > 0:
                 for day in range(date, current_day):
                     dates_for_week.append((day, current_month, current_year))
-            if date < 0:
+            if date <= 0:
                 begin_date = previous_month_length + date
                 for day in range(begin_date, begin_date + 7):
                     year = current_year
@@ -89,10 +89,10 @@ class MathOperations:
             for date in year:
                 scraper = CmcScraper(self.crypto, date, date)
                 average_for_year += scraper.get_data()[1][0][1]
-            if year != self.date_lst[-1]:
-                average_for_year = round(average_for_year / 12, 2)
-            else:
-                average_for_year = round(average_for_year / datetime.date.today().month, 2)
+                if year != self.date_lst[-1]:
+                    average_for_year = round(average_for_year / 12, 2)
+                else:
+                    average_for_year = round(average_for_year / datetime.date.today().month, 2)
             price_lst.append(str(average_for_year))
         year_lst = [i[0].split('-')[-1] for i in self.date_lst]
         return year_lst, price_lst
@@ -101,7 +101,6 @@ class MathOperations:
         price_lst = []
         year_changed = False
         first_date_year = self.date_lst[0].split('-')[-1]
-        print(self.date_lst)
         for date in self.date_lst:
             scraper = CmcScraper(self.crypto, date, date)
             price_lst.append(scraper.get_data()[1][0][1])
