@@ -688,7 +688,7 @@ async def finishing(message: types.Message, state):
     await state.finish()
 
 
-@dp.message_handler(commands=['transactions'])
+@dp.message_handler(commands=['transaction'])
 async def process_transaction_command(message: types.Message):
     user_id = message.from_user.id
     if is_user_logged(user_id):
@@ -707,7 +707,8 @@ async def crypto_for_transaction_chosen(message: types.Message, state):
         await bot.send_message(user_id, str_phrases['choose_available'])
         return
     await state.update_data(chosen_crypto=phrases.cryptos_abbreviations[chosen_crypto])
-    await bot.send_message(user_id, str_phrases['send_secret_key_next'])
+    await bot.send_message(user_id, str_phrases['send_secret_key_next'],
+                           reply_markup=ReplyKeyboardRemove())
     await SendTransaction.waiting_for_secret_key.set()
 
 
@@ -725,16 +726,16 @@ async def amount_sent(message: types.Message, state):
         amount = float(message.text)
         if amount <= 0:
             raise AmountError
-        await state.update_date(chosen_amount=amount)
+        await state.update_data(chosen_amount=amount)
         await bot.send_message(user_id, str_phrases['send_wallet_for_tx'],
                                reply_markup=ReplyKeyboardRemove())
+        await SendTransaction.waiting_for_wallet_to_send.set()
     except ValueError:
-        await bot.send_message(user_id, str_phrases['just_number'], reply_markup=keyboards.main_kb)
-        await state.finish()
+        await bot.send_message(user_id, str_phrases['just_number'])
+        return
     except AmountError:
-        await bot.send_message(user_id, str_phrases['invalid_amount'],
-                               reply_markup=keyboards.main_kb)
-        await state.finish()
+        await bot.send_message(user_id, str_phrases['invalid_amount'])
+        return
 
 
 async def wallet_sent(message: types.Message, state):
@@ -749,7 +750,8 @@ async def wallet_sent(message: types.Message, state):
         crypto_operations.send_transaction(chosen_crypto, wallet, chosen_amount,
                                            private_key=private_key)
     except InvalidAddress:
-        await bot.send_message(user_id, state['invalid_wallet'], reply_markup=keyboards.main_kb)
+        await bot.send_message(user_id, str_phrases['invalid_wallet'],
+                               reply_markup=keyboards.main_kb)
         await state.finish()
     except AssertionError:
         await bot.send_message(user_id, str_phrases['invalid_private_key'])
@@ -838,6 +840,17 @@ def register_balance_handlers(dispatcher):
     dispatcher.register_message_handler(use_bounded_wallet, state=CheckBalance.wallet_is_bound)
 
 
+def register_transaction_handlers(dispatcher):
+    dispatcher.register_message_handler(process_transaction_command, commands="tx", state='*')
+    dispatcher.register_message_handler(crypto_for_transaction_chosen,
+                                        state=SendTransaction.waiting_for_crypto)
+    dispatcher.register_message_handler(private_key_sent,
+                                        state=SendTransaction.waiting_for_secret_key)
+    dispatcher.register_message_handler(amount_sent, state=SendTransaction.waiting_for_amount)
+    dispatcher.register_message_handler(wallet_sent,
+                                        state=SendTransaction.waiting_for_wallet_to_send)
+
+
 if __name__ == '__main__':
     register_handlers_price(dp)
     register_mail_handlers(dp)
@@ -845,4 +858,5 @@ if __name__ == '__main__':
     register_buy_handlers(dp)
     register_bind_handlers(dp)
     register_balance_handlers(dp)
+    register_transaction_handlers(dp)
     executor.start_polling(dp)
