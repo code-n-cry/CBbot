@@ -63,28 +63,28 @@ class CryptoOperating:
         response = requests.get(url).json()
         if 'error' in list(response.keys()):
             raise InvalidAddress
-        balance_keys = {
-            'BTC': response['final_balance'] / 100000000,
-            'LTC': response['final_balance'] / 100000000,
-            'DOGE': response['balance'],
-            'ETH': response['balance'] / 1000000000000000000
-        }
-        return balance_keys[crypto_abbreviation]
+        print(crypto_abbreviation)
+        if crypto_abbreviation in ['BTC', 'LTC']:
+            return response['final_balance'] / 100000000
+        if crypto_abbreviation == 'DOGE':
+            return response['balance']
+        else:
+            return response['balance'] / 1000000000000000000
 
     def send_bitcoins(self, private_key: str, to_public_address: str, amount: int):
-        amount_to_satoshi = amount * 100000000
+        amount_to_satoshi = int(amount * 100000000)
         tx = simple_spend(private_key, to_public_address, amount_to_satoshi, coin_symbol='btc',
                           api_key=self.token, privkey_is_compressed=False)
         return tx
 
     def send_ltc(self, private_key: str, to_public_address: str, amount: int):
-        amount_to_satoshi = amount * 100000000
+        amount_to_satoshi = int(amount * 100000000)
         tx = simple_spend(private_key, to_public_address, amount_to_satoshi, coin_symbol='ltc',
                           api_key=self.token, privkey_is_compressed=False)
         return tx
 
     def send_doges(self, private_key: str, to_public_address: str, amount: int):
-        amount_to_satoshi = amount * 100000000
+        amount_to_satoshi = int(amount * 100000000)
         tx = simple_spend(private_key, to_public_address, amount_to_satoshi, coin_symbol='doge',
                           api_key=self.token,
                           privkey_is_compressed=False)  # tx-сокращение от transaction
@@ -104,3 +104,4 @@ class CryptoOperating:
         else:
             self.abbreviation_to_tx_function[crypto_abbreviation](private_key, address_send_to,
                                                                   amount)
+

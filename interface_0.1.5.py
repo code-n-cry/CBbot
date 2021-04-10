@@ -572,7 +572,9 @@ async def crypto_for_buy_chosen(message: types.message, state):
 
 async def generating_code(message: types.message, state):
     try:
-        chosen_amount = float(message.text)
+        chosen_amount = float(message.text.replace(',', '.'))
+        if chosen_amount <= 0:
+            raise AmountError
         session = db_session.create_session()
         state_data = await state.get_data()
         chosen_crypto = state_data['chosen_crypto']
@@ -617,9 +619,12 @@ async def generating_code(message: types.message, state):
         await bot.send_message(message.from_user.id, msg, reply_markup=keyboards.payment_kb)
         await BuyingState.next()
     except ValueError:
-        logging.warning('Bad code', name='interface')
         await types.ChatActions.typing(2)
         await bot.send_message(message.from_user.id, str_phrases['just_number'])
+        return
+    except AmountError:
+        await types.ChatActions.typing(3)
+        await bot.send_message(message.from_user.id, str_phrases['invalid_amount'])
         return
 
 
