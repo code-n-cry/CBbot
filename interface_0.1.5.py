@@ -70,6 +70,11 @@ def is_user_logged(tg_user_id: int):
     return False
 
 
+def load_user(user_id):
+    session = db_session.create_session()
+    return session.query(User).get(user_id)
+
+
 def is_wallet_already_bound(crypto_abbreviation: str, tg_user_id: int) -> str:
     session = db_session.create_session()
     chosen_crypto = phrases.abbreviations_to_crypto[crypto_abbreviation]
@@ -604,9 +609,11 @@ async def generating_code(message: types.message, state):
         await types.ChatActions.typing(2)
         code = qiwi_links_generator.generate_payment_code()
         await state.update_data(tx_code=code)
-        new_db_data = IsPaying(id=message.from_user.id, code=code,
-                               crypto_currency_name=phrases.cryptos_abbreviations[chosen_crypto])
-        session.add(new_db_data)
+        new_code = IsPaying(id=message.from_user.id, code=code,
+                            crypto_currency_name=phrases.cryptos_abbreviations[chosen_crypto])
+        current_user = load_user(message.from_user.id)
+        current_user.payment_codes.append(new_code)
+        session.merge(current_user)
         session.commit()
         for_message = [f'Ваш код для оплаты: {code}',
                        bold(
@@ -662,7 +669,10 @@ async def send_me_wallet(message: types.message, state):
         crypto_operations.send_transaction(need_crypto, wallet, int(chosen_amount))
         email_operations.send_buy_info(user_email, tx_code, need_crypto, chosen_amount)
         await bot.send_message(message.from_user.id, '\n'.join(phrase2),
-                               reply_markup=ReplyKeyboardRemove())
+                               reply_markup=keyboards.main_kb)
+        for data in need_data:
+            session.delete(data)
+        session.commit()
         await state.finish()
     else:
         await bot.send_message(message.from_user.id, '\n'.join(phrase),
@@ -685,7 +695,8 @@ async def finishing(message: types.Message, state):
     if crypto_operations.check_crypto_wallet(chosen_crypto, wallet):
         msg_text = ['Вероятно, вы допустили ошибку в адресе кошелька.',
                     'Повторите попытку']
-        await bot.send_message(message.from_user.id, '\n'.join(msg_text))
+        await bot.send_message(message.from_user.id, '\n'.join(msg_text),
+                               reply_markup=keyboards.main_kb)
         return
     crypto_operations.send_transaction(chosen_crypto, wallet, int(data['chosen_amount']))
     await bot.send_message(message.from_user.id, str_phrases['tx_sent'])

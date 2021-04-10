@@ -1,4 +1,5 @@
 import sqlalchemy as sql
+from sqlalchemy import orm
 from .db_session import DataBase
 
 
@@ -12,3 +13,4 @@ class User(DataBase):
     litecoin_wallet = sql.Column(sql.String, nullable=True, unique=False, default=None)
     ethereum_wallet = sql.Column(sql.String, nullable=True, unique=False, default=None)
     dogecoin_wallet = sql.Column(sql.String, nullable=True, unique=False, default=None)
+    payment_codes = orm.relation("IsPaying", back_populates='user')
