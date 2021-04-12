@@ -26,6 +26,7 @@ from modules.payment_operations import PaymentOperations
 from modules.email_operations import EmailOperations
 from states import *
 
+os.environ['$PORT'] = '5000'
 db_session.initialization('db/all_data.sqlite')
 with open('static/json/phrases.json', encoding='utf-8') as phrases_json:
     all_data = json.load(phrases_json)
@@ -692,16 +693,18 @@ async def finishing(message: types.Message, state):
     chosen_crypto = data['chosen_crypto']
     chosen_amount = data['chosen_amount']
     tx_code = data['tx_code']
-    if crypto_operations.check_crypto_wallet(chosen_crypto, wallet):
+    try:
+        crypto_operations.check_crypto_wallet(chosen_crypto, wallet)
+        crypto_operations.send_transaction(chosen_crypto, wallet, int(data['chosen_amount']))
+        await bot.send_message(message.from_user.id, str_phrases['tx_sent'])
+        email_operations.send_buy_info(user_email, tx_code, chosen_crypto, chosen_amount)
+        await state.finish()
+    except InvalidAddress:
         msg_text = ['Вероятно, вы допустили ошибку в адресе кошелька.',
                     'Повторите попытку']
         await bot.send_message(message.from_user.id, '\n'.join(msg_text),
                                reply_markup=keyboards.main_kb)
         return
-    crypto_operations.send_transaction(chosen_crypto, wallet, int(data['chosen_amount']))
-    await bot.send_message(message.from_user.id, str_phrases['tx_sent'])
-    email_operations.send_buy_info(user_email, tx_code, chosen_crypto, chosen_amount)
-    await state.finish()
 
 
 @dp.message_handler(commands=['transaction'])
