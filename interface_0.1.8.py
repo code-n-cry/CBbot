@@ -416,13 +416,13 @@ async def wallet_not_bound(message: types.Message, state):
     wallet = message.text
     state_data = await state.get_data()
     chosen_crypto = state_data['chosen_crypto']
-    if crypto_operations.check_crypto_wallet(chosen_crypto, wallet):
+    try:
         balance = crypto_operations.check_crypto_wallet(chosen_crypto, wallet)
         msg_text = f'Баланс этого {chosen_crypto}-кошелька: {balance} {chosen_crypto}'
         await types.ChatActions.typing(2)
         await bot.send_message(message.from_user.id, msg_text, reply_markup=keyboards.main_kb)
         await state.finish()
-    else:
+    except InvalidAddress:
         msg_text = ['Кошелёк не прошёл проверку на правильность', 'Вероятно, вы ошиблись']
         await types.ChatActions.typing(2)
         await bot.send_message(message.from_user.id, '\n'.join(msg_text),
