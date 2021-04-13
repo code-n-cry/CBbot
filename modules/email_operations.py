@@ -29,15 +29,13 @@ class EmailOperations:
             self.sender.send_message(message)
             self.sender.quit()
 
-
     def send_buy_info(self, email_to: str, tx_code: str, crypto_currency: str, amount: int):
             message = multipart.MIMEMultipart()
             message['From'] = self.email
             message['To'] = email_to
             phrase = [f'Уведомление о покупке с кодом {tx_code}']
             message['Subject'] = '\n'.join(phrase)
-            msg_text = f""""С вашего аккаунта в системе CBbot совершена покупка {amount}
-                        {crypto_currency}"""
+            msg_text = f""""С вашего аккаунта в системе CBbot совершена покупка {amount} {crypto_currency}"""
             message.attach(text.MIMEText(msg_text, 'plain'))
             self.sender = smtplib.SMTP_SSL('smtp.mail.yahoo.com', 465)
             self.sender.login(self.email, self.password)
