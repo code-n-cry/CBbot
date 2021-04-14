@@ -93,7 +93,7 @@ class CryptoOperating:
         balance = all_data['balance']
         return balance / 100000000
 
-    def send_transaction(self, crypto_abbreviation: str, address_send_to: str, amount: int,
+    def send_transaction(self, crypto_abbreviation: str, address_send_to: str, amount: float,
                          private_key=False):
         if not private_key:
             self.abbreviation_to_tx_function[crypto_abbreviation](
