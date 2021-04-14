@@ -7,12 +7,10 @@ DataBase = dec.declarative_base()
 __factory = None
 
 
-def initialization(filename: str):
+def initialization():
     global __factory
 
     if __factory:
-        return
-    if not filename:
         return
 
     connection = f'sqlite:///{filename.strip()}?check_same_thread=False'
