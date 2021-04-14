@@ -2,7 +2,6 @@
   "Fees": {
     "Litecoin": 0.005,
     "Bitcoin": 0.0000002,
-    "Dogecoin": 100000000
-    
+    "Dogecoin": 3
   }
 }
