@@ -13,7 +13,7 @@ def initialization():
     if __factory:
         return
 
-    connection = f'sqlite:///{filename.strip()}?check_same_thread=False'
+    connection = f'postgresql://tveoirzaohoepo:a9e2e8cdbbaebebe5a5f18906c2015fc5a16389fcab2d1dda09ed6b4ecb7fe2f@ec2-54-216-185-51.eu-west-1.compute.amazonaws.com:5432/d9beeg70n64ksh'
     engine = sql.create_engine(connection, echo=False)
     __factory = orm.sessionmaker(bind=engine)
     from . import __all_models
