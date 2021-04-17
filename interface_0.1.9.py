@@ -27,7 +27,7 @@ from modules.email_operations import EmailOperations
 from states import *
 
 os.environ['$PORT'] = '5000'
-db_session.initialization('db/all_data.sqlite')
+db_session.initialization()
 with open('static/json/phrases.json', encoding='utf-8') as phrases_json:
     all_data = json.load(phrases_json)
     str_phrases = all_data['str_phrases']
