@@ -60,7 +60,6 @@ class CryptoOperating:
         response = requests.get(url).json()
         if 'error' in list(response.keys()):
             raise InvalidAddress
-        print(crypto_abbreviation)
         if crypto_abbreviation in ['BTC', 'LTC']:
             return response['final_balance'] / 100000000
         if crypto_abbreviation == 'DOGE':
@@ -68,19 +67,22 @@ class CryptoOperating:
         else:
             return response['balance'] / 1000000000000000000
 
-    def send_bitcoins(self, private_key: str, to_public_address: str, amount: float):
+    def send_bitcoins(self, private_key: str, to_public_address: str, amount: float,
+                      is_key_compressed=False):
         amount_to_satoshi = int(amount * 100000000)
         tx = simple_spend(private_key, to_public_address, amount_to_satoshi, coin_symbol='btc',
                           api_key=self.token, privkey_is_compressed=False)
         return tx
 
-    def send_ltc(self, private_key: str, to_public_address: str, amount: float):
+    def send_ltc(self, private_key: str, to_public_address: str, amount: float,
+                 is_key_compressed=False):
         amount_to_satoshi = int(amount * 100000000)
         tx = simple_spend(private_key, to_public_address, amount_to_satoshi, coin_symbol='ltc',
                           api_key=self.token, privkey_is_compressed=False)
         return tx
 
-    def send_doges(self, private_key: str, to_public_address: str, amount: float):
+    def send_doges(self, private_key: str, to_public_address: str, amount: float,
+                   is_key_compressed=False):
         amount_to_satoshi = int(amount * 100000000)
         tx = simple_spend(private_key, to_public_address, amount_to_satoshi, coin_symbol='doge',
                           api_key=self.token,
@@ -100,5 +102,4 @@ class CryptoOperating:
                 self.private_keys[crypto_abbreviation], address_send_to, amount)
         else:
             self.abbreviation_to_tx_function[crypto_abbreviation](private_key, address_send_to,
-                                                                  amount)
-
+                                                                  amount, is_key_compressed=True)

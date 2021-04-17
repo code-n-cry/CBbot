@@ -44,7 +44,9 @@ class EmailOperations:
             self.sender.quit()
 
     def verify_email(self, email: str, name: str):
-        if validate_email(email, verify=True):
+        print(email, name)
+        print(validate_email(email))
+        if validate_email(email):
             code = str(random.randrange(100000, 999999))
             body = f'Доброго времени суток, {name}!\nТвой код верификации: {code}'
             self.send_authorization_message(email, body)

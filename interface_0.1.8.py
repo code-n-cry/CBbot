@@ -773,9 +773,10 @@ async def wallet_sent(message: types.Message, state):
                                reply_markup=keyboards.main_kb)
         await state.finish()
     except AssertionError:
-        await bot.send_message(user_id, str_phrases['invalid_private_key'])
+        await bot.send_message(user_id, str_phrases['invalid_private_key'],
+                               reply_markup=keyboards.main_kb)
     except Exception:
-        await bot.send_message(user_id, str_phrases['bad_tx'])
+        await bot.send_message(user_id, str_phrases['bad_tx'], reply_markup=keyboards.main_kb)
 
 
 # привязка текста к операциям
