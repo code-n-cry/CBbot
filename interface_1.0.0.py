@@ -6,6 +6,7 @@ import requests
 from aiogram.utils import executor
 import keyboards
 import phrases
+import asyncio
 from aiogram import Dispatcher, Bot, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
@@ -83,6 +84,11 @@ def is_wallet_already_bound(crypto_abbreviation: str, tg_user_id: int) -> str:
     if eval(f'user.{chosen_crypto}_wallet'):
         return eval(f'user.{chosen_crypto}_wallet')
     return ''
+
+
+async def delete_message(message: types.Message, sleep_time: int):
+    await asyncio.sleep(sleep_time)
+    await message.delete()
 
 
 # Стартовая команда
@@ -252,7 +258,7 @@ async def code_sent(message, state):
 async def bind_command_start(message: types.Message):
     msg_text = "В следующем сообщении выберите нужную криптовалюту:"
     reply_kb = keyboards.cryptos_kb
-    await types.ChatActions.typing(3)
+    await types.ChatActions.typing(2)
     await bot.send_message(message.from_user.id, msg_text, reply_markup=reply_kb)
     await BindWallet.waiting_for_crypto.set()
 
@@ -263,7 +269,7 @@ async def waiting_for_crypto_for_bind(message: types.Message, state):
         await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'])
         return
     crypto_abbreviation = phrases.cryptos_abbreviations[chosen_crypto]
-    await types.ChatActions.typing(3)
+    await types.ChatActions.typing(2)
     await state.update_data(chosen_crypto=crypto_abbreviation)
     if is_wallet_already_bound(crypto_abbreviation, message.from_user.id):
         await bot.send_message(message.from_user.id,
@@ -305,20 +311,20 @@ async def waiting_for_bind_variant(message: types.Message, state):
             'ETH': crypto_operations.generate_eth_wallet
         }
         address, private = abbreviation_to_function[state_data['chosen_crypto']]()
-        await bot.send_message(message.from_user.id,
-                               phrases.wallet_info(address, private,
-                                                   state_data['chosen_crypto']),
-                               reply_markup=keyboards.main_kb, parse_mode=ParseMode.MARKDOWN)
+        msg = await bot.send_message(message.from_user.id,
+                                     phrases.wallet_info(address, private,
+                                                         state_data['chosen_crypto']),
+                                     reply_markup=keyboards.main_kb,
+                                     parse_mode=ParseMode.MARKDOWN)
         session = db_session.create_session()
         current_user = session.query(User).filter(User.id == message.from_user.id).first()
         exec(
             f'current_user.{phrases.abbreviations_to_crypto[state_data["chosen_crypto"]]}_wallet="{address}"')
-        # выше конструкция для занесения в базу данных адреса кошелька,
-        # т.к. удобнее способа мы не нашли, данные добавляются через форматированную строку
-        session.add(current_user)
+        session.merge(current_user)
         session.commit()
         await state.finish()
-
+        # выше конструкция для занесения в базу данных адреса кошелька,
+        # т.к. удобнее способа мы не нашли, данные добавляются через форматированную строку
     else:
         await bot.send_message(message.from_user.id,
                                f'Хорошо, теперь пришлите адрес {state_data["chosen_crypto"]}-кошелька:',
@@ -377,6 +383,7 @@ async def crypto_for_balance_chosen(message: types.Message, state: aiogram.dispa
         await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'])
         return
     await state.update_data(chosen_crypto=chosen_crypto.lower())
+    print(message.from_user.id)
     wallet = is_wallet_already_bound(phrases.cryptos_abbreviations[chosen_crypto],
                                      message.from_user.id)
     await state.update_data(chosen_crypto=phrases.cryptos_abbreviations[chosen_crypto])
@@ -642,7 +649,7 @@ async def send_me_wallet(message: types.message, state):
     state_data = await state.get_data()
     need_data = session.query(IsPaying).filter(IsPaying.id == message.from_user.id).all()
     need_code = need_data[-1].code
-    sleep(3.5)
+    sleep(2.5)
     payment_history = qiwi_links_generator.get_all_history()
     for data in payment_history['data']:
         if data['comment'] == need_code:

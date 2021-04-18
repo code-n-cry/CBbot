@@ -14,3 +14,6 @@ class User(DataBase):
     ethereum_wallet = sql.Column(sql.String, nullable=True, unique=False, default=None)
     dogecoin_wallet = sql.Column(sql.String, nullable=True, unique=False, default=None)
     payment_codes = orm.relation("IsPaying", back_populates='user')
+
+    def __repr__(self):
+        return f'User\n{self.id}\n{self.email}'
