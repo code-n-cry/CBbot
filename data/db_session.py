@@ -1,6 +1,5 @@
 import sqlalchemy as sql
 import sqlalchemy.orm as orm
-import logging
 import sqlalchemy.ext.declarative as dec
 
 DataBase = dec.declarative_base()

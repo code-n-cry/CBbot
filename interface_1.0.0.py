@@ -558,7 +558,7 @@ async def start_buying_command(message: types.message):
         await types.ChatActions.typing(2)
         await BuyingState.waiting_for_crypto.set()
         await bot.send_message(message.from_user.id, '\n'.join(list_phrases['start_buying']),
-                               reply_markup=keyboards.cryptos_kb)
+                               reply_markup=keyboards.tx_kb)
     else:
         await bot.send_message(message.from_user.id, str_phrases['u_need_account'])
 
@@ -667,8 +667,8 @@ async def send_me_wallet(message: types.message, state):
         chosen_amount = state_data['chosen_amount']
         user = session.query(User).filter(User.id == message.from_user.id).first()
         user_email = user.email
-        crypto_operations.send_transaction(need_crypto, wallet, int(chosen_amount))
-        email_operations.send_buy_info(user_email, tx_code, need_crypto, chosen_amount)
+        tx_hash = crypto_operations.send_transaction(need_crypto, wallet, int(chosen_amount))
+        email_operations.send_buy_info(user_email, tx_code, need_crypto, chosen_amount, tx_hash)
         await bot.send_message(message.from_user.id, '\n'.join(phrase2),
                                reply_markup=keyboards.main_kb)
         for data in need_data:
@@ -695,9 +695,10 @@ async def finishing(message: types.Message, state):
     tx_code = data['tx_code']
     try:
         crypto_operations.check_crypto_wallet(chosen_crypto, wallet)
-        crypto_operations.send_transaction(chosen_crypto, wallet, int(data['chosen_amount']))
+        tx_hash = crypto_operations.send_transaction(chosen_crypto, wallet,
+                                                     int(data['chosen_amount']))
         await bot.send_message(message.from_user.id, str_phrases['tx_sent'])
-        email_operations.send_buy_info(user_email, tx_code, chosen_crypto, chosen_amount)
+        email_operations.send_buy_info(user_email, tx_code, chosen_crypto, chosen_amount, tx_hash)
         await state.finish()
     except InvalidAddress:
         msg_text = ['Вероятно, вы допустили ошибку в адресе кошелька.',
@@ -766,8 +767,12 @@ async def wallet_sent(message: types.Message, state):
         private_key = state_data['private_key']
         wallet = message.text
         crypto_operations.check_crypto_wallet(chosen_crypto, wallet)
-        crypto_operations.send_transaction(chosen_crypto, wallet, chosen_amount,
-                                           private_key=private_key)
+        tx_hash = crypto_operations.send_transaction(chosen_crypto, wallet, chosen_amount,
+                                                     private_key=private_key)
+        msg_text = [f'Транзакция на кошелёк {wallet} отправлена!',
+                    f'ID транзакции: {tx_hash}']
+        await bot.send_message(message.from_user.id, '\n'.join(msg_text),
+                               reply_markup=keyboards.main_kb)
     except InvalidAddress:
         await bot.send_message(user_id, str_phrases['invalid_wallet'],
                                reply_markup=keyboards.main_kb)

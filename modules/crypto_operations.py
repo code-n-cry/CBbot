@@ -3,10 +3,15 @@ import json
 import requests
 from cryptos import *
 from pywallet import wallet
-from exceptions import InvalidAddress
+from exceptions import InvalidAddress, BadTransaction
 
 
 class CryptoOperating:
+    """
+    Класс для операций с криповалютой. Позволяет проверять баланс, отправлять транзакции и
+    генерировать криптовалютные кошельки. Здесь используется HTTP-API разных сервисов.
+    """
+
     def __init__(self):
         with open('static/json/general_bot_info.json', encoding='utf-8') as json_data:
             all_data = json.load(json_data)
@@ -22,9 +27,9 @@ class CryptoOperating:
             'DOGE': self.doge_class
         }
         self.abbreviations_to_link = {
-            'DOGE': 'https://dogechain.info/api/v1/address/balance/',
-            'BTC': 'https://blockchain.info/rawaddr/',
-            'LTC': 'https://api.blockcypher.com/v1/ltc/main/addrs/',
+            'DOGE': 'https://chain.so/api/v2/get_address_balance/',
+            'BTC': 'https://chain.so/api/v2/get_address_balance/',
+            'LTC': 'https://chain.so/api/v2/get_address_balance/',
             'ETH': 'https://api.blockcypher.com/v1/eth/main/addrs/'
         }
         self.abbreviation_to_tx_function = {
@@ -54,31 +59,33 @@ class CryptoOperating:
         return eth_wallet['address'], eth_wallet['private_key']
 
     def check_crypto_wallet(self, crypto_abbreviation: str, crypto_wallet: str):
-        url = self.abbreviations_to_link[crypto_abbreviation] + f'{crypto_wallet}/balance'
-        if crypto_abbreviation in ['DOGE', 'BTC']:
-            url = self.abbreviations_to_link[crypto_abbreviation] + f'{crypto_wallet}'
-        response = requests.get(url).json()
-        if 'error' in list(response.keys()):
+        if crypto_abbreviation in ['DOGE', 'BTC', 'LTC']:
+            url_part2 = f'{crypto_abbreviation}/{crypto_wallet}'
+            full_url = self.abbreviations_to_link[crypto_abbreviation] + url_part2
+            response = requests.get(full_url).json()
+            if response['status'] == 'success':
+                return response['data']['confirmed_balance']
             raise InvalidAddress
-        if crypto_abbreviation in ['BTC', 'LTC']:
-            return response['final_balance'] / 100000000
-        if crypto_abbreviation == 'DOGE':
-            return response['balance']
-        else:
-            return response['balance'] / 1000000000000000000
+        try:
+            url = self.abbreviations_to_link[crypto_abbreviation] + crypto_wallet
+            response = requests.get(url).json()
+            return response['final_balance'] / 1000000000000000000
+        except KeyError:
+            raise InvalidAddress
 
     def send_bitcoins(self, private_key: str, to_public_address: str, amount: float,
                       is_key_compressed=False):
         amount_to_satoshi = int(amount * 100000000)
         tx = simple_spend(private_key, to_public_address, amount_to_satoshi, coin_symbol='btc',
-                          api_key=self.token, privkey_is_compressed=False)
+                          api_key=self.token,
+                          privkey_is_compressed=is_key_compressed)  # tx-сокращение от transaction
         return tx
 
     def send_ltc(self, private_key: str, to_public_address: str, amount: float,
                  is_key_compressed=False):
         amount_to_satoshi = int(amount * 100000000)
         tx = simple_spend(private_key, to_public_address, amount_to_satoshi, coin_symbol='ltc',
-                          api_key=self.token, privkey_is_compressed=False)
+                          api_key=self.token, privkey_is_compressed=is_key_compressed)
         return tx
 
     def send_doges(self, private_key: str, to_public_address: str, amount: float,
@@ -86,10 +93,22 @@ class CryptoOperating:
         amount_to_satoshi = int(amount * 100000000)
         tx = simple_spend(private_key, to_public_address, amount_to_satoshi, coin_symbol='doge',
                           api_key=self.token,
-                          privkey_is_compressed=False)  # tx-сокращение от transaction
+                          privkey_is_compressed=is_key_compressed)
         return tx
 
+    def check_chain_transaction(self, crypto_abbreviation: str, tx_hash: str):
+        url = f'https://chain.so/api/v2/get_confidence/{crypto_abbreviation}/{tx_hash}'
+        response = requests.get(url).json()
+        status = response['status']
+        if status == 'failed':
+            raise BadTransaction
+        return status
+
     def get_balance(self, crypto_abbreviation: str):
+        """
+        Конкретно эта функция проверяет баланс НАШИХ кошельков, реквизитов бота.
+         За другие балансы отвечает функция check_crypto_wallet.
+        """
         all_data = get_address_full(self.addresses[crypto_abbreviation],
                                     coin_symbol=crypto_abbreviation.lower())
         balance = all_data['balance']
@@ -98,8 +117,8 @@ class CryptoOperating:
     def send_transaction(self, crypto_abbreviation: str, address_send_to: str, amount: float,
                          private_key=False):
         if not private_key:
-            self.abbreviation_to_tx_function[crypto_abbreviation](
-                self.private_keys[crypto_abbreviation], address_send_to, amount)
-        else:
-            self.abbreviation_to_tx_function[crypto_abbreviation](private_key, address_send_to,
-                                                                  amount, is_key_compressed=True)
+            return self.abbreviation_to_tx_function[
+                crypto_abbreviation](self.private_keys[crypto_abbreviation], address_send_to, amount)
+        return self.abbreviation_to_tx_function[crypto_abbreviation](private_key,
+                                                                     address_send_to, amount,
+                                                                     is_key_compressed=True)

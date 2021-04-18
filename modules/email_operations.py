@@ -17,31 +17,33 @@ class EmailOperations:
         self.sender = None
 
     def send_authorization_message(self, email_to: str, msg_text: str):
-            message = multipart.MIMEMultipart()
-            message['From'] = self.email
-            message['To'] = email_to
-            phrase = ['Авторизация в CBbot']
-            message['Subject'] = '\n'.join(phrase)
-            message.attach(text.MIMEText(msg_text, 'plain'))
-            self.sender = smtplib.SMTP_SSL('smtp.mail.yahoo.com', 465)
-            self.sender.login(self.email, self.password)
-            sleep(2.5)
-            self.sender.send_message(message)
-            self.sender.quit()
+        message = multipart.MIMEMultipart()
+        message['From'] = self.email
+        message['To'] = email_to
+        phrase = ['Авторизация в CBbot']
+        message['Subject'] = '\n'.join(phrase)
+        message.attach(text.MIMEText(msg_text, 'plain'))
+        self.sender = smtplib.SMTP_SSL('smtp.mail.yahoo.com', 465)
+        self.sender.login(self.email, self.password)
+        sleep(2.5)
+        self.sender.send_message(message)
+        self.sender.quit()
 
-    def send_buy_info(self, email_to: str, tx_code: str, crypto_currency: str, amount: int):
-            message = multipart.MIMEMultipart()
-            message['From'] = self.email
-            message['To'] = email_to
-            phrase = [f'Уведомление о покупке с кодом {tx_code}']
-            message['Subject'] = '\n'.join(phrase)
-            msg_text = f""""С вашего аккаунта в системе CBbot совершена покупка {amount} {crypto_currency}"""
-            message.attach(text.MIMEText(msg_text, 'plain'))
-            self.sender = smtplib.SMTP_SSL('smtp.mail.yahoo.com', 465)
-            self.sender.login(self.email, self.password)
-            sleep(2.5)
-            self.sender.send_message(message)
-            self.sender.quit()
+    def send_buy_info(self, email_to: str, tx_code: str, crypto_currency: str, amount: int,
+                      tx_hash: str):
+        message = multipart.MIMEMultipart()
+        message['From'] = self.email
+        message['To'] = email_to
+        phrase = [f'Уведомление о покупке с кодом {tx_code}']
+        message['Subject'] = '\n'.join(phrase)
+        msg_text = [f'С вашего аккаунта в CBbot совершена покупка {amount} {crypto_currency}',
+                    f'ID транзакции в сети {crypto_currency}: {tx_hash}']
+        message.attach(text.MIMEText('\n'.join(msg_text), 'plain'))
+        self.sender = smtplib.SMTP_SSL('smtp.mail.yahoo.com', 465)
+        self.sender.login(self.email, self.password)
+        sleep(2.5)
+        self.sender.send_message(message)
+        self.sender.quit()
 
     def verify_email(self, email: str, name: str):
         print(email, name)
