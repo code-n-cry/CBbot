@@ -21,7 +21,8 @@ from data import db_session
 from data.user import User
 from data.verification import IsVerifying
 from data.waiting_for_money import IsPaying
-from modules.math_operations import MathOperations
+from data.doing_diargamm import DoingDiagram
+from modules.math_operations import MathOperations, add_session
 from modules.crypto_operations import CryptoOperating
 from modules.payment_operations import PaymentOperations
 from modules.email_operations import EmailOperations
@@ -51,7 +52,6 @@ bot = Bot(token=token)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 dp.middleware.setup(LoggingMiddleware())
-plot_builder = MathOperations('', '', '', '')
 crypto_operations = CryptoOperating()
 email_operations = EmailOperations(bot_email, bot_password)
 crypto_to_their_operations = {
@@ -506,7 +506,10 @@ async def crypto_for_graph_chosen(message, state):
     await types.ChatActions.typing()
     await bot.send_message(message.from_user.id, 'К какой валюте привести?',
                            reply_markup=keyboards.fiat_kb)
-    await state.update_data(chosen_crypto=chosen_crypto_code)
+    session = db_session.create_session()
+    diagram = DoingDiagram(id=message.from_user.id, chosen_crypto=chosen_crypto_code)
+    session.add(diagram)
+    session.commit()
     await BuildGraph.next()
 
 
@@ -520,7 +523,10 @@ async def fiat_for_graph_chosen(message, state):
     await bot.send_message(message.from_user.id,
                            'Отлично! Теперь выберите период, за который отобразить цену',
                            reply_markup=keyboards.periods_kb)
-    await state.update_data(chosen_fiat=chosen_fiat_code)
+    session = db_session.create_session()
+    diagram = session.query(DoingDiagram).filter(DoingDiagram.id == message.from_user.id).first()
+    diagram.chosen_fiat = chosen_fiat_code
+    session.commit()
     await BuildGraph.next()
 
 
@@ -531,7 +537,9 @@ async def period_for_graph_chosen(message, state):
         await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'])
         return
     chosen_period = message.text.capitalize()
-    crypto_and_fiat = await state.get_data()
+    current_user_data = session.query(DoingDiagram).filter(DoingDiagram.id == message.from_user.id).first()
+    chosen_crypto = current_user_data.chosen_crypto
+    chosen_fiat = current_user_data.chosen_fiat
     filename = 'static/img/'
     all_pngs = []
     for file_name in os.listdir(filename):
@@ -542,20 +550,19 @@ async def period_for_graph_chosen(message, state):
         filename += f'plot{last_num + 1}'
     else:
         filename = f'plot{0}'
-    plot_builder.set_new_data(chosen_period, crypto_and_fiat['chosen_crypto'],
-                              crypto_and_fiat['chosen_fiat'], filename)
-    plot_builder.main()
+    add_session(chosen_period, chosen_crypto, chosen_fiat, filename)
     await types.ChatActions.upload_photo(2)
     media = types.MediaGroup()
     media.attach_photo(types.InputFile(filename + '.png'))
     await message.reply_media_group(media=media)
     reply_markup = keyboards.main_kb
+    session.delete(current_user_data)
+    session.commit()
     is_user_in_db = [user for user in
                      session.query(User).filter(User.id == message.from_user.id)]
     if not is_user_in_db:
         reply_markup = keyboards.newbie_kb
     await bot.send_message(message.from_user.id, 'Ваша диаграмма!', reply_markup=reply_markup)
-    os.remove(filename + '.png')
     await state.finish()
 
 
