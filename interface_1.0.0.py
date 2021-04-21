@@ -247,9 +247,8 @@ async def code_sent(message, state):
                                    reply_markup=keyboards.newbie_kb)
             await state.finish()
     except ValueError:
-        logging.warning('Bad Email', name='interface')
         await types.ChatActions.typing()
-        await bot.send_message(message.from_user.id, str_phrases['invalid_email'],
+        await bot.send_message(message.from_user.id, str_phrases['invalid_code'],
                                reply_markup=keyboards.newbie_kb)
         await state.finish()
 
