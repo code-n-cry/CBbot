@@ -102,6 +102,13 @@ class CryptoOperating:
         status = response['status']
         if status == 'failed':
             raise BadTransaction
+        confirmations = response['data']['confirmations']
+        if confirmations <= 1:
+            return 1
+        if confirmations == 2:
+            return 2
+        if confirmations >= 3:
+            return 3
         return status
 
     def get_balance(self, crypto_abbreviation: str):
