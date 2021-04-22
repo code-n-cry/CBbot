@@ -21,8 +21,8 @@ from data import db_session
 from data.user import User
 from data.verification import IsVerifying
 from data.waiting_for_money import IsPaying
-from data.doing_diargamm import DoingDiagram
-from modules.math_operations import MathOperations, add_session
+from data.doing_diagramm import DoingDiagram
+from modules.math_operations import add_session
 from modules.crypto_operations import CryptoOperating
 from modules.payment_operations import PaymentOperations
 from modules.email_operations import EmailOperations
@@ -310,11 +310,17 @@ async def waiting_for_bind_variant(message: types.Message, state):
             'ETH': crypto_operations.generate_eth_wallet
         }
         address, private = abbreviation_to_function[state_data['chosen_crypto']]()
+        await types.ChatActions.typing(2)
         msg = await bot.send_message(message.from_user.id,
                                      phrases.wallet_info(address, private,
                                                          state_data['chosen_crypto']),
                                      reply_markup=keyboards.main_kb,
                                      parse_mode=ParseMode.MARKDOWN)
+        media = types.MediaGroup()
+        media.attach_photo(f'https://chart.googleapis.com/chart?chs=250x250&cht=qr&chl={address}',
+                           'QR-код вашего кошелька')
+        await types.ChatActions.upload_photo(2)
+        await msg.reply_media_group(media=media)
         session = db_session.create_session()
         current_user = session.query(User).filter(User.id == message.from_user.id).first()
         exec(
@@ -496,7 +502,7 @@ async def start_graph_command(message):
                            reply_markup=keyboard)
 
 
-async def crypto_for_graph_chosen(message, state):
+async def crypto_for_graph_chosen(message):
     if message.text.capitalize() not in phrases.available_crypto:
         await types.ChatActions.typing()
         await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'])
@@ -512,7 +518,7 @@ async def crypto_for_graph_chosen(message, state):
     await BuildGraph.next()
 
 
-async def fiat_for_graph_chosen(message, state):
+async def fiat_for_graph_chosen(message):
     if message.text.lower() not in phrases.available_fiat:
         await types.ChatActions.typing()
         await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'])
@@ -536,7 +542,8 @@ async def period_for_graph_chosen(message, state):
         await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'])
         return
     chosen_period = message.text.capitalize()
-    current_user_data = session.query(DoingDiagram).filter(DoingDiagram.id == message.from_user.id).first()
+    current_user_data = session.query(DoingDiagram).filter(
+        DoingDiagram.id == message.from_user.id).first()
     chosen_crypto = current_user_data.chosen_crypto
     chosen_fiat = current_user_data.chosen_fiat
     filename = 'static/img/'
@@ -552,7 +559,7 @@ async def period_for_graph_chosen(message, state):
     add_session(chosen_period, chosen_crypto, chosen_fiat, filename)
     await types.ChatActions.upload_photo(2)
     media = types.MediaGroup()
-    media.attach_photo(types.InputFile(filename + '.png'))
+    media.attach_photo(types.InputFile(filename + '.png'), caption='Ваша диаграмма!')
     await message.reply_media_group(media=media)
     reply_markup = keyboards.main_kb
     session.delete(current_user_data)
@@ -561,7 +568,9 @@ async def period_for_graph_chosen(message, state):
                      session.query(User).filter(User.id == message.from_user.id)]
     if not is_user_in_db:
         reply_markup = keyboards.newbie_kb
-    await bot.send_message(message.from_user.id, 'Ваша диаграмма!', reply_markup=reply_markup)
+    await types.ChatActions.typing(1)
+    await bot.send_message(message.from_user.id, 'Возращаем вас к основному интерфейсу...',
+                           reply_markup=reply_markup)
     await state.finish()
 
 
