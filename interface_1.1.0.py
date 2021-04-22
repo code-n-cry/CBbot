@@ -317,8 +317,14 @@ async def waiting_for_bind_variant(message: types.Message, state):
                                      reply_markup=keyboards.main_kb,
                                      parse_mode=ParseMode.MARKDOWN)
         media = types.MediaGroup()
-        media.attach_photo(f'https://chart.googleapis.com/chart?chs=250x250&cht=qr&chl={address}',
-                           'QR-код вашего кошелька')
+        try:
+            media.attach_photo(
+                f'https://chart.googleapis.com/chart?chs=250x250&cht=qr&chl={address}',
+                'QR-код вашего кошелька')
+        except aiogram.utils.exceptions.InvalidHTTPUrlContent:
+            media.attach_photo(
+                f'https://chart.googleapis.com/chart?chs=250x250&cht=qr&chl={address}',
+                'QR-код вашего кошелька')  # как показала практика, со второго раза работает
         await types.ChatActions.upload_photo(2)
         await msg.reply_media_group(media=media)
         session = db_session.create_session()
