@@ -100,7 +100,7 @@ class CryptoOperating:
         url = f'https://chain.so/api/v2/get_confidence/{crypto_abbreviation}/{tx_hash}'
         response = requests.get(url).json()
         status = response['status']
-        if status == 'failed':
+        if status == 'fail':
             raise BadTransaction
         confirmations = response['data']['confirmations']
         if confirmations <= 1:
