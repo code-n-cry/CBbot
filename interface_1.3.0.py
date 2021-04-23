@@ -859,7 +859,7 @@ async def tx_hash_sent(message: types.Message, state):
 
 # привязка текста к операциям
 @dp.message_handler()
-async def process_text(message):
+async def process_text(message: types.Message):
     """Делаем так, чтобы комманды были доступны с помощью клавиатуры и обычных фраз, а не только
     команд типа /команда"""
     if message.text.lower() == 'помощь':
@@ -890,6 +890,8 @@ async def process_text(message):
         await process_balance_command(message)
     if message.text.lower() == 'отправить крипто-транзакцию💸':
         await process_transaction_command(message)
+    if message.text.lower() == 'проверить статус транзакции🔖':
+        await start_status_command(message)
 
 
 # связываем функции и классы из файла states.py для ведения диалогов
