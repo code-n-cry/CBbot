@@ -949,6 +949,13 @@ def register_transaction_handlers(dispatcher):
                                         state=SendTransaction.waiting_for_wallet_to_send)
 
 
+def register_status_handlers(dispatcher):
+    dispatcher.register_message_handler(start_status_command, commands='status', state='*')
+    dispatcher.register_message_handler(crypto_for_status_chosen,
+                                        state=CheckStatus.waiting_for_crypto)
+    dispatcher.register_message_handler(tx_hash_sent, state=CheckStatus.waiting_for_tx_hash)
+
+
 if __name__ == '__main__':
     register_handlers_price(dp)
     register_mail_handlers(dp)
@@ -957,4 +964,5 @@ if __name__ == '__main__':
     register_bind_handlers(dp)
     register_balance_handlers(dp)
     register_transaction_handlers(dp)
+    register_status_handlers(dp)
     executor.start_polling(dp)
