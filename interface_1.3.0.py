@@ -825,7 +825,7 @@ async def start_status_command(message: types.Message):
         return
     await bot.send_message(user_id, str_phrases['choose_crypto_network'],
                            reply_markup=keyboards.cryptos_kb)
-    await SendTransaction.waiting_for_crypto.set()
+    await CheckStatus.waiting_for_crypto.set()
 
 
 async def crypto_for_status_chosen(message: types.Message, state):
