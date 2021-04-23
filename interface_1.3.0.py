@@ -3,17 +3,16 @@ import os
 import logging
 import moneywagon
 import requests
-from aiogram.utils import executor
-import keyboards
-import phrases
+import aiogram
 import asyncio
 from aiogram import Dispatcher, Bot, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.types import ReplyKeyboardRemove, ParseMode
 from aiogram.utils.markdown import bold
-import aiogram
-from exceptions import *
+from aiogram.utils import executor
+from constants import phrases, keyboards
+from constants.exceptions import *
 from smtplib import SMTPRecipientsRefused
 from time import sleep
 from emoji import emojize
@@ -26,23 +25,25 @@ from modules.math_operations import add_session
 from modules.crypto_operations import CryptoOperating
 from modules.payment_operations import PaymentOperations
 from modules.email_operations import EmailOperations
-from states import *
+from constants.states import *
 
-os.environ['$PORT'] = '5000'
 db_session.initialization()
 with open('static/json/phrases.json', encoding='utf-8') as phrases_json:
     all_data = json.load(phrases_json)
     str_phrases = all_data['str_phrases']
     list_phrases = all_data['list_phrases']
+
 with open('static/json/general_bot_info.json', encoding='utf-8') as tokens:
     all_data = json.load(tokens)
     qiwi_token = all_data['Tokens']['Qiwi']
     qiwi_phone = all_data['Tokens']['Qiwi_phone']
     token = all_data['Tokens']['Tg_Token']
     dogecoin_wallet = all_data['Wallets']['DOGE']
+
 with open('static/json/crypto_fees.json', encoding='utf-8') as fees:
     all_data = json.load(fees)
     crypto_fees = all_data['Fees']
+
 with open('static/json/general_bot_info.json', encoding='utf-8') as input_json:
     all_data = json.load(input_json)
     bot_email = all_data['Email']['email']
@@ -691,18 +692,23 @@ async def send_me_wallet(message: types.message, state):
     phrase2 = ['Отлично, платёж прошёл успешно!',
                f'Транзакция будет отправлена на привязанный {need_crypto} кошелёк!']
     if wallet:
-        tx_code = state_data['tx_code']
-        chosen_amount = state_data['chosen_amount']
-        user = session.query(User).filter(User.id == message.from_user.id).first()
-        user_email = user.email
-        tx_hash = crypto_operations.send_transaction(need_crypto, wallet, int(chosen_amount))
-        email_operations.send_buy_info(user_email, tx_code, need_crypto, chosen_amount, tx_hash)
-        await bot.send_message(message.from_user.id, '\n'.join(phrase2),
-                               reply_markup=keyboards.main_kb)
-        for data in need_data:
-            session.delete(data)
-        session.commit()
-        await state.finish()
+        try:
+            tx_code = state_data['tx_code']
+            chosen_amount = state_data['chosen_amount']
+            user = session.query(User).filter(User.id == message.from_user.id).first()
+            user_email = user.email
+            tx_hash = crypto_operations.send_transaction(need_crypto, wallet, int(chosen_amount))
+            email_operations.send_buy_info(user_email, tx_code, need_crypto, chosen_amount, tx_hash)
+            await bot.send_message(message.from_user.id, '\n'.join(phrase2),
+                                   reply_markup=keyboards.main_kb)
+            for data in need_data:
+                session.delete(data)
+            session.commit()
+            await state.finish()
+        except Exception:
+            await bot.send_message(message.from_user.id, str_phrases['error_occurred'],
+                                   reply_markup=keyboards.main_kb)
+            await state.finish()
     else:
         await bot.send_message(message.from_user.id, '\n'.join(phrase),
                                reply_markup=ReplyKeyboardRemove())
@@ -729,9 +735,7 @@ async def finishing(message: types.Message, state):
         email_operations.send_buy_info(user_email, tx_code, chosen_crypto, chosen_amount, tx_hash)
         await state.finish()
     except InvalidAddress:
-        msg_text = ['Вероятно, вы допустили ошибку в адресе кошелька.',
-                    'Повторите попытку']
-        await bot.send_message(message.from_user.id, '\n'.join(msg_text),
+        await bot.send_message(message.from_user.id, str_phrases['invalid_wallet'],
                                reply_markup=keyboards.main_kb)
         return
 
@@ -810,6 +814,47 @@ async def wallet_sent(message: types.Message, state):
                                reply_markup=keyboards.main_kb)
     except Exception:
         await bot.send_message(user_id, str_phrases['bad_tx'], reply_markup=keyboards.main_kb)
+
+
+@dp.message_handler(commands=['/status'])
+async def start_status_command(message: types.Message):
+    user_id = message.from_user.id
+    if not load_user(user_id):
+        await bot.send_message(user_id, str_phrases['u_need_account'],
+                               reply_markup=keyboards.newbie_kb)
+        return
+    await bot.send_message(user_id, str_phrases['choose_crypto_network'],
+                           reply_markup=keyboards.cryptos_kb)
+    await SendTransaction.waiting_for_crypto.set()
+
+
+async def crypto_for_status_chosen(message: types.Message, state):
+    user_id = message.from_user.id
+    if message.text not in phrases.available_crypto:
+        await bot.send_message(user_id, str_phrases['pls_choose_available'])
+        return
+    await state.update_data(chosen_crypto=message.text)
+    await bot.send_message(user_id, str_phrases['input_tx_hash'], reply_markup=ReplyKeyboardRemove())
+    await CheckStatus.waiting_for_tx_hash.set()
+
+
+async def tx_hash_sent(message: types.Message, state):
+    user_id = message.from_user.id
+    state_data = await state.get_data()
+    tx_hash = message.text
+    try:
+        chosen_crypto = phrases.cryptos_abbreviations[state_data['chosen_crypto']]
+        tx_status = crypto_operations.check_chain_transaction(chosen_crypto, tx_hash)
+        msg_text = str_phrases['unconfirmed_tx']
+        if tx_status == 2:
+            msg_text = str_phrases['processing_tx']
+        if tx_status == 3:
+            msg_text = str_phrases['confirmed_tx']
+        await bot.send_message(user_id, msg_text, reply_markup=keyboards.main_kb)
+        await state.finish()
+    except BadTransaction:
+        await bot.send_message(user_id, str_phrases['invalid_tx'], reply_markup=keyboards.main_kb)
+        await state.finish()
 
 
 # привязка текста к операциям
