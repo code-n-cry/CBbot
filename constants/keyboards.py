@@ -6,12 +6,14 @@ from constants.phrases import available_crypto, fiats_for_buttons, available_per
 account_operations = KeyboardButton('Операции с аккаунтом🧾')
 create_button = KeyboardButton('Создать аккаунт👦')
 info_button = KeyboardButton('Инфо об аккаунте🗄️')
+news_button = KeyboardButton('Рассылка новостей📰')
 bind_wallet = KeyboardButton('Привязать криптовалютный кошелёк👛')
 want_generate = KeyboardButton('Хочу сгенерировать себе кошелёк🖨️')
 want_bind_own = KeyboardButton('Хочу привязать собственный📝')
 variants_kb = ReplyKeyboardMarkup(resize_keyboard=True).add(want_generate).add(want_bind_own)
 not_logged_kb = ReplyKeyboardMarkup(resize_keyboard=True).row(create_button)
-logged_kb = ReplyKeyboardMarkup(resize_keyboard=True).row(info_button).row(bind_wallet)
+logged_kb = ReplyKeyboardMarkup(resize_keyboard=True).row(info_button).row(bind_wallet).\
+    row(news_button)
 email_btn = KeyboardButton('Привязать почту📩')
 email_kb = ReplyKeyboardMarkup(resize_keyboard=True).add(email_btn)
 """Help command inline"""

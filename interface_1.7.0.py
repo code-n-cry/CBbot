@@ -5,6 +5,7 @@ import moneywagon
 import requests
 import aiogram
 import asyncio
+import aioschedule
 from aiogram import Dispatcher, Bot, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
@@ -25,6 +26,7 @@ from modules.math_operations import add_session
 from modules.crypto_operations import CryptoOperating
 from modules.payment_operations import PaymentOperations
 from modules.email_operations import EmailOperations
+from modules.news import News
 from constants.states import *
 
 db_session.initialization()
@@ -816,7 +818,7 @@ async def wallet_sent(message: types.Message, state):
         await bot.send_message(user_id, str_phrases['bad_tx'], reply_markup=keyboards.main_kb)
 
 
-@dp.message_handler(commands=['/status'])
+@dp.message_handler(commands=['status'])
 async def start_status_command(message: types.Message):
     user_id = message.from_user.id
     if not load_user(user_id):
@@ -857,6 +859,49 @@ async def tx_hash_sent(message: types.Message, state):
         await state.finish()
 
 
+@dp.message_handler(commands=['news'])
+async def start_news_command(message: types.Message):
+    user_id = message.from_user.id
+    if not load_user(user_id):
+        await bot.send_message(user_id, str_phrases['u_need_account'],
+                               reply_markup=keyboards.newbie_kb)
+        return
+    session = db_session.create_session()
+    user = session.query(User).filter(User.id == user_id).first()
+    if not user.news_checked:
+        await bot.send_message(user_id, '\n'.join(list_phrases['news_intro']),
+                               reply_markup=keyboards.yes_or_no_kb)
+    else:
+        await bot.send_message(user_id, '\n'.join(list_phrases['news_reply']),
+                               reply_markup=keyboards.yes_or_no_kb)
+    await NewsSubscribe.waiting_for_choose.set()
+
+
+async def choose_news_status(message: types.Message, state):
+    user_id = message.from_user.id
+    session = db_session.create_session()
+    user = session.query(User).filter(User.id == user_id).first()
+    if message.text.lower() == 'да✔️':
+        if not user.news_checked:
+            user.news_checked = True
+            session.commit()
+            await bot.send_message(user_id, str_phrases['thanks_news'],
+                                   reply_markup=keyboards.main_kb)
+        else:
+            user.news_checked = False
+            session.commit()
+            await bot.send_message(user_id, str_phrases['sad_news'],
+                                   reply_markup=keyboards.main_kb)
+    if message.text.lower() == 'нет❌':
+        if not user.news_checked:
+            await bot.send_message(user_id, str_phrases['not_sub_news'],
+                                   reply_markup=keyboards.main_kb)
+        else:
+            await bot.send_message(user_id, str_phrases['re_sub_news'],
+                                   reply_markup=keyboards.main_kb)
+    await state.finish()
+
+
 # привязка текста к операциям
 @dp.message_handler()
 async def process_text(message: types.Message):
@@ -892,6 +937,8 @@ async def process_text(message: types.Message):
         await process_transaction_command(message)
     if message.text.lower() == 'проверить статус транзакции🔖':
         await start_status_command(message)
+    if message.text.lower() == 'рассылка новостей📰':
+        await start_news_command(message)
 
 
 # связываем функции и классы из файла states.py для ведения диалогов
@@ -958,6 +1005,24 @@ def register_status_handlers(dispatcher):
     dispatcher.register_message_handler(tx_hash_sent, state=CheckStatus.waiting_for_tx_hash)
 
 
+def register_news_handlers(dispatcher):
+    dispatcher.register_message_handler(start_news_command, commands='status', state='*')
+    dispatcher.register_message_handler(choose_news_status,
+                                        state=NewsSubscribe.waiting_for_choose)
+
+
+async def news_sender():
+    news = News()
+    aioschedule.every().day.at("10:00").do(news.send_news, bot=bot)
+    while True:
+        await aioschedule.run_pending()
+        await asyncio.sleep(1)
+
+
+async def on_startup(_):
+    asyncio.create_task(news_sender())
+
+
 if __name__ == '__main__':
     register_handlers_price(dp)
     register_mail_handlers(dp)
@@ -967,4 +1032,5 @@ if __name__ == '__main__':
     register_balance_handlers(dp)
     register_transaction_handlers(dp)
     register_status_handlers(dp)
-    executor.start_polling(dp)
+    register_news_handlers(dp)
+    executor.start_polling(dp, on_startup=on_startup)

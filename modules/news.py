@@ -44,10 +44,10 @@ class News:
                 news.append([title, date, link])
         return news
 
-    async def send_news(self, bot):
+    async def send_news(self, bot=None):
         session = db_session.create_session()
         check = session.query(User).filter(User.news_checked == True).all()
         news = self.get_all_news()
         for elem in check:
-            await bot.send_message(int(str(elem).split('\n')[1]), 'Ежедневная рассыка')
-            await bot.send_message(int(str(elem).split('\n')[1]), '\n'.join(news[0]))
+            await bot.send_message(elem.id, 'Ежедневная рассыка')
+            await bot.send_message(elem.id, '\n'.join(news[0]))
