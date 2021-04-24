@@ -4,13 +4,11 @@ import json
 import os
 import asyncio
 from currency_converter import CurrencyConverter
-from multiprocessing import Process, Queue
 import aiogram.types
 from calendar import monthrange
 import pymorphy2
 from constants.keyboards import main_kb
 from cryptocmd import CmcScraper
-from aioprocessing import AioQueue, AioProcess
 
 queue = asyncio.Queue()
 
