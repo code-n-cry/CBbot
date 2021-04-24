@@ -8,3 +8,7 @@ class InvalidAddress(Exception):
 
 class AmountError(Exception):
     pass
+
+
+class BadTransaction(Exception):
+    pass

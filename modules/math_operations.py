@@ -199,3 +199,8 @@ class MathOperations:
         self.crypto = crypto
         self.fiat = fiat
         self.img_name = plot_img_name
+
+
+def add_session(period: str, crypto: str, fiat: str, plot_img_name: str):
+    plot_builder = MathOperations(period, crypto, fiat, plot_img_name)
+    plot_builder.main()

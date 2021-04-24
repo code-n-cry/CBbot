@@ -1,1 +1,1 @@
-web: python interface_0.1.5.py
+worker: python interface_1.5.0.py $PORT
