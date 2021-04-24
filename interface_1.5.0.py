@@ -21,7 +21,7 @@ from data.user import User
 from data.verification import IsVerifying
 from data.waiting_for_money import IsPaying
 from data.doing_diagramm import DoingDiagram
-from modules.math_operations import add_session
+from modules.math_operations import create_process
 from modules.crypto_operations import CryptoOperating
 from modules.payment_operations import PaymentOperations
 from modules.email_operations import EmailOperations
@@ -49,6 +49,7 @@ with open('static/json/general_bot_info.json', encoding='utf-8') as input_json:
     bot_email = all_data['Email']['email']
     bot_password = all_data['Email']['password']
 
+queue = asyncio.Queue()
 bot = Bot(token=token)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
@@ -562,22 +563,12 @@ async def period_for_graph_chosen(message, state):
         last_num = int(all_pngs[-1][-1])
         filename += f'plot{last_num + 1}'
     else:
-        filename = f'plot{0}'
-    add_session(chosen_period, chosen_crypto, chosen_fiat, filename)
-    await types.ChatActions.upload_photo(2)
-    media = types.MediaGroup()
-    media.attach_photo(types.InputFile(filename + '.png'), caption='Ваша диаграмма!')
-    await message.reply_media_group(media=media)
-    reply_markup = keyboards.main_kb
+        filename += f'plot{0}'
+    data = (chosen_period, chosen_crypto, chosen_fiat, filename, bot, message)
+    await queue.put(data)
+    loop.create_task(create_process(data))
     session.delete(current_user_data)
     session.commit()
-    is_user_in_db = [user for user in
-                     session.query(User).filter(User.id == message.from_user.id)]
-    if not is_user_in_db:
-        reply_markup = keyboards.newbie_kb
-    await types.ChatActions.typing(1)
-    await bot.send_message(message.from_user.id, 'Возращаем вас к основному интерфейсу...',
-                           reply_markup=reply_markup)
     await state.finish()
 
 
@@ -959,6 +950,7 @@ def register_status_handlers(dispatcher):
 
 
 if __name__ == '__main__':
+    loop = asyncio.get_event_loop()
     register_handlers_price(dp)
     register_mail_handlers(dp)
     register_graph_handlers(dp)

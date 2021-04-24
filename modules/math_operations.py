@@ -1,10 +1,18 @@
 import matplotlib.pyplot as plt
 import datetime
 import json
+import os
+import asyncio
 from currency_converter import CurrencyConverter
+from multiprocessing import Process, Queue
+import aiogram.types
 from calendar import monthrange
 import pymorphy2
+from constants.keyboards import main_kb
 from cryptocmd import CmcScraper
+from aioprocessing import AioQueue, AioProcess
+
+queue = asyncio.Queue()
 
 
 class MathOperations:
@@ -201,6 +209,17 @@ class MathOperations:
         self.img_name = plot_img_name
 
 
-def add_session(period: str, crypto: str, fiat: str, plot_img_name: str):
+async def create_process(data: tuple):
+    period, crypto, fiat, plot_img_name, bot, message = data
     plot_builder = MathOperations(period, crypto, fiat, plot_img_name)
     plot_builder.main()
+    media = aiogram.types.MediaGroup()
+    media.attach_photo(aiogram.types.InputFile(plot_img_name + '.png'), caption='Ваша диаграмма!')
+    await aiogram.types.ChatActions.upload_photo(2)
+    await message.reply_media_group(media=media)
+    reply_markup = main_kb
+    await bot.send_message(message.from_user.id, 'Возвращаем вас к основному интерфейсу...',
+                           reply_markup=reply_markup)
+    os.remove(plot_img_name + '.png')
+
+
