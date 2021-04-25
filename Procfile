@@ -1,1 +1,1 @@
-worker: python interface_1.7.0.py $PORT
+worker: python main.py $PORT
