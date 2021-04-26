@@ -3,7 +3,7 @@ import json
 import requests
 from cryptos import *
 from pywallet import wallet
-from exceptions import InvalidAddress, BadTransaction
+from constants.exceptions import InvalidAddress, BadTransaction
 
 
 class CryptoOperating:
@@ -100,8 +100,15 @@ class CryptoOperating:
         url = f'https://chain.so/api/v2/get_confidence/{crypto_abbreviation}/{tx_hash}'
         response = requests.get(url).json()
         status = response['status']
-        if status == 'failed':
+        if status == 'fail':
             raise BadTransaction
+        confirmations = response['data']['confirmations']
+        if confirmations <= 1:
+            return 1
+        if confirmations == 2:
+            return 2
+        if confirmations >= 3:
+            return 3
         return status
 
     def get_balance(self, crypto_abbreviation: str):

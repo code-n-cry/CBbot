@@ -1,9 +1,8 @@
 import smtplib
-import logging
 import random
 from email.mime import multipart, text
 from validate_email import validate_email
-from exceptions import EmailDoesNotExists
+from constants.exceptions import EmailDoesNotExists
 from time import sleep
 
 

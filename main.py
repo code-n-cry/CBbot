@@ -3,16 +3,17 @@ import os
 import logging
 import moneywagon
 import requests
-from aiogram.utils import executor
-import keyboards
-import phrases
+import aiogram
+import asyncio
+import aioschedule
 from aiogram import Dispatcher, Bot, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.types import ReplyKeyboardRemove, ParseMode
 from aiogram.utils.markdown import bold
-import aiogram
-from exceptions import *
+from aiogram.utils import executor
+from constants import phrases, keyboards
+from constants.exceptions import *
 from smtplib import SMTPRecipientsRefused
 from time import sleep
 from emoji import emojize
@@ -20,37 +21,41 @@ from data import db_session
 from data.user import User
 from data.verification import IsVerifying
 from data.waiting_for_money import IsPaying
-from modules.math_operations import MathOperations
+from data.doing_diagramm import DoingDiagram
+from modules.math_operations import create_process
 from modules.crypto_operations import CryptoOperating
 from modules.payment_operations import PaymentOperations
 from modules.email_operations import EmailOperations
-from states import *
+from modules.news import News
+from constants.states import *
 
-os.environ['$PORT'] = '5000'
 db_session.initialization()
 with open('static/json/phrases.json', encoding='utf-8') as phrases_json:
     all_data = json.load(phrases_json)
     str_phrases = all_data['str_phrases']
     list_phrases = all_data['list_phrases']
+
 with open('static/json/general_bot_info.json', encoding='utf-8') as tokens:
     all_data = json.load(tokens)
     qiwi_token = all_data['Tokens']['Qiwi']
     qiwi_phone = all_data['Tokens']['Qiwi_phone']
     token = all_data['Tokens']['Tg_Token']
     dogecoin_wallet = all_data['Wallets']['DOGE']
+
 with open('static/json/crypto_fees.json', encoding='utf-8') as fees:
     all_data = json.load(fees)
     crypto_fees = all_data['Fees']
+
 with open('static/json/general_bot_info.json', encoding='utf-8') as input_json:
     all_data = json.load(input_json)
     bot_email = all_data['Email']['email']
     bot_password = all_data['Email']['password']
 
+queue = asyncio.Queue()
 bot = Bot(token=token)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 dp.middleware.setup(LoggingMiddleware())
-plot_builder = MathOperations('', '', '', '')
 crypto_operations = CryptoOperating()
 email_operations = EmailOperations(bot_email, bot_password)
 crypto_to_their_operations = {
@@ -83,6 +88,11 @@ def is_wallet_already_bound(crypto_abbreviation: str, tg_user_id: int) -> str:
     if eval(f'user.{chosen_crypto}_wallet'):
         return eval(f'user.{chosen_crypto}_wallet')
     return ''
+
+
+async def delete_message(message: types.Message, sleep_time: int):
+    await asyncio.sleep(sleep_time)
+    await message.delete()
 
 
 # Стартовая команда
@@ -241,9 +251,8 @@ async def code_sent(message, state):
                                    reply_markup=keyboards.newbie_kb)
             await state.finish()
     except ValueError:
-        logging.warning('Bad Email', name='interface')
         await types.ChatActions.typing()
-        await bot.send_message(message.from_user.id, str_phrases['invalid_email'],
+        await bot.send_message(message.from_user.id, str_phrases['invalid_code'],
                                reply_markup=keyboards.newbie_kb)
         await state.finish()
 
@@ -252,7 +261,7 @@ async def code_sent(message, state):
 async def bind_command_start(message: types.Message):
     msg_text = "В следующем сообщении выберите нужную криптовалюту:"
     reply_kb = keyboards.cryptos_kb
-    await types.ChatActions.typing(3)
+    await types.ChatActions.typing(2)
     await bot.send_message(message.from_user.id, msg_text, reply_markup=reply_kb)
     await BindWallet.waiting_for_crypto.set()
 
@@ -263,7 +272,7 @@ async def waiting_for_crypto_for_bind(message: types.Message, state):
         await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'])
         return
     crypto_abbreviation = phrases.cryptos_abbreviations[chosen_crypto]
-    await types.ChatActions.typing(3)
+    await types.ChatActions.typing(2)
     await state.update_data(chosen_crypto=crypto_abbreviation)
     if is_wallet_already_bound(crypto_abbreviation, message.from_user.id):
         await bot.send_message(message.from_user.id,
@@ -305,20 +314,32 @@ async def waiting_for_bind_variant(message: types.Message, state):
             'ETH': crypto_operations.generate_eth_wallet
         }
         address, private = abbreviation_to_function[state_data['chosen_crypto']]()
-        await bot.send_message(message.from_user.id,
-                               phrases.wallet_info(address, private,
-                                                   state_data['chosen_crypto']),
-                               reply_markup=keyboards.main_kb, parse_mode=ParseMode.MARKDOWN)
+        await types.ChatActions.typing(2)
+        msg = await bot.send_message(message.from_user.id,
+                                     phrases.wallet_info(address, private,
+                                                         state_data['chosen_crypto']),
+                                     reply_markup=keyboards.main_kb,
+                                     parse_mode=ParseMode.MARKDOWN)
+        media = types.MediaGroup()
+        try:
+            media.attach_photo(
+                f'https://chart.googleapis.com/chart?chs=250x250&cht=qr&chl={address}',
+                'QR-код вашего кошелька')
+        except aiogram.utils.exceptions.InvalidHTTPUrlContent:
+            media.attach_photo(
+                f'https://chart.googleapis.com/chart?chs=250x250&cht=qr&chl={address}',
+                'QR-код вашего кошелька')  # как показала практика, со второго раза работает
+        await types.ChatActions.upload_photo(2)
+        await msg.reply_media_group(media=media)
         session = db_session.create_session()
         current_user = session.query(User).filter(User.id == message.from_user.id).first()
         exec(
             f'current_user.{phrases.abbreviations_to_crypto[state_data["chosen_crypto"]]}_wallet="{address}"')
-        # выше конструкция для занесения в базу данных адреса кошелька,
-        # т.к. удобнее способа мы не нашли, данные добавляются через форматированную строку
-        session.add(current_user)
+        session.merge(current_user)
         session.commit()
         await state.finish()
-
+        # выше конструкция для занесения в базу данных адреса кошелька,
+        # т.к. удобнее способа мы не нашли, данные добавляются через форматированную строку
     else:
         await bot.send_message(message.from_user.id,
                                f'Хорошо, теперь пришлите адрес {state_data["chosen_crypto"]}-кошелька:',
@@ -377,6 +398,7 @@ async def crypto_for_balance_chosen(message: types.Message, state: aiogram.dispa
         await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'])
         return
     await state.update_data(chosen_crypto=chosen_crypto.lower())
+    print(message.from_user.id)
     wallet = is_wallet_already_bound(phrases.cryptos_abbreviations[chosen_crypto],
                                      message.from_user.id)
     await state.update_data(chosen_crypto=phrases.cryptos_abbreviations[chosen_crypto])
@@ -490,7 +512,7 @@ async def start_graph_command(message):
                            reply_markup=keyboard)
 
 
-async def crypto_for_graph_chosen(message, state):
+async def crypto_for_graph_chosen(message):
     if message.text.capitalize() not in phrases.available_crypto:
         await types.ChatActions.typing()
         await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'])
@@ -499,11 +521,14 @@ async def crypto_for_graph_chosen(message, state):
     await types.ChatActions.typing()
     await bot.send_message(message.from_user.id, 'К какой валюте привести?',
                            reply_markup=keyboards.fiat_kb)
-    await state.update_data(chosen_crypto=chosen_crypto_code)
+    session = db_session.create_session()
+    diagram = DoingDiagram(id=message.from_user.id, chosen_crypto=chosen_crypto_code)
+    session.add(diagram)
+    session.commit()
     await BuildGraph.next()
 
 
-async def fiat_for_graph_chosen(message, state):
+async def fiat_for_graph_chosen(message):
     if message.text.lower() not in phrases.available_fiat:
         await types.ChatActions.typing()
         await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'])
@@ -513,7 +538,10 @@ async def fiat_for_graph_chosen(message, state):
     await bot.send_message(message.from_user.id,
                            'Отлично! Теперь выберите период, за который отобразить цену',
                            reply_markup=keyboards.periods_kb)
-    await state.update_data(chosen_fiat=chosen_fiat_code)
+    session = db_session.create_session()
+    diagram = session.query(DoingDiagram).filter(DoingDiagram.id == message.from_user.id).first()
+    diagram.chosen_fiat = chosen_fiat_code
+    session.commit()
     await BuildGraph.next()
 
 
@@ -524,7 +552,10 @@ async def period_for_graph_chosen(message, state):
         await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'])
         return
     chosen_period = message.text.capitalize()
-    crypto_and_fiat = await state.get_data()
+    current_user_data = session.query(DoingDiagram).filter(
+        DoingDiagram.id == message.from_user.id).first()
+    chosen_crypto = current_user_data.chosen_crypto
+    chosen_fiat = current_user_data.chosen_fiat
     filename = 'static/img/'
     all_pngs = []
     for file_name in os.listdir(filename):
@@ -534,21 +565,12 @@ async def period_for_graph_chosen(message, state):
         last_num = int(all_pngs[-1][-1])
         filename += f'plot{last_num + 1}'
     else:
-        filename = f'plot{0}'
-    plot_builder.set_new_data(chosen_period, crypto_and_fiat['chosen_crypto'],
-                              crypto_and_fiat['chosen_fiat'], filename)
-    plot_builder.main()
-    await types.ChatActions.upload_photo(2)
-    media = types.MediaGroup()
-    media.attach_photo(types.InputFile(filename + '.png'))
-    await message.reply_media_group(media=media)
-    reply_markup = keyboards.main_kb
-    is_user_in_db = [user for user in
-                     session.query(User).filter(User.id == message.from_user.id)]
-    if not is_user_in_db:
-        reply_markup = keyboards.newbie_kb
-    await bot.send_message(message.from_user.id, 'Ваша диаграмма!', reply_markup=reply_markup)
-    os.remove(filename + '.png')
+        filename += f'plot{0}'
+    data = (chosen_period, chosen_crypto, chosen_fiat, filename, bot, message)
+    await queue.put(data)
+    loop.create_task(create_process(data))
+    session.delete(current_user_data)
+    session.commit()
     await state.finish()
 
 
@@ -642,7 +664,7 @@ async def send_me_wallet(message: types.message, state):
     state_data = await state.get_data()
     need_data = session.query(IsPaying).filter(IsPaying.id == message.from_user.id).all()
     need_code = need_data[-1].code
-    sleep(3.5)
+    sleep(2.5)
     payment_history = qiwi_links_generator.get_all_history()
     for data in payment_history['data']:
         if data['comment'] == need_code:
@@ -663,18 +685,23 @@ async def send_me_wallet(message: types.message, state):
     phrase2 = ['Отлично, платёж прошёл успешно!',
                f'Транзакция будет отправлена на привязанный {need_crypto} кошелёк!']
     if wallet:
-        tx_code = state_data['tx_code']
-        chosen_amount = state_data['chosen_amount']
-        user = session.query(User).filter(User.id == message.from_user.id).first()
-        user_email = user.email
-        tx_hash = crypto_operations.send_transaction(need_crypto, wallet, int(chosen_amount))
-        email_operations.send_buy_info(user_email, tx_code, need_crypto, chosen_amount, tx_hash)
-        await bot.send_message(message.from_user.id, '\n'.join(phrase2),
-                               reply_markup=keyboards.main_kb)
-        for data in need_data:
-            session.delete(data)
-        session.commit()
-        await state.finish()
+        try:
+            tx_code = state_data['tx_code']
+            chosen_amount = state_data['chosen_amount']
+            user = session.query(User).filter(User.id == message.from_user.id).first()
+            user_email = user.email
+            tx_hash = crypto_operations.send_transaction(need_crypto, wallet, int(chosen_amount))
+            email_operations.send_buy_info(user_email, tx_code, need_crypto, chosen_amount, tx_hash)
+            await bot.send_message(message.from_user.id, '\n'.join(phrase2),
+                                   reply_markup=keyboards.main_kb)
+            for data in need_data:
+                session.delete(data)
+            session.commit()
+            await state.finish()
+        except Exception:
+            await bot.send_message(message.from_user.id, str_phrases['error_occurred'],
+                                   reply_markup=keyboards.main_kb)
+            await state.finish()
     else:
         await bot.send_message(message.from_user.id, '\n'.join(phrase),
                                reply_markup=ReplyKeyboardRemove())
@@ -701,9 +728,7 @@ async def finishing(message: types.Message, state):
         email_operations.send_buy_info(user_email, tx_code, chosen_crypto, chosen_amount, tx_hash)
         await state.finish()
     except InvalidAddress:
-        msg_text = ['Вероятно, вы допустили ошибку в адресе кошелька.',
-                    'Повторите попытку']
-        await bot.send_message(message.from_user.id, '\n'.join(msg_text),
+        await bot.send_message(message.from_user.id, str_phrases['invalid_wallet'],
                                reply_markup=keyboards.main_kb)
         return
 
@@ -784,9 +809,93 @@ async def wallet_sent(message: types.Message, state):
         await bot.send_message(user_id, str_phrases['bad_tx'], reply_markup=keyboards.main_kb)
 
 
+@dp.message_handler(commands=['status'])
+async def start_status_command(message: types.Message):
+    user_id = message.from_user.id
+    if not load_user(user_id):
+        await bot.send_message(user_id, str_phrases['u_need_account'],
+                               reply_markup=keyboards.newbie_kb)
+        return
+    await bot.send_message(user_id, str_phrases['choose_crypto_network'],
+                           reply_markup=keyboards.cryptos_kb)
+    await CheckStatus.waiting_for_crypto.set()
+
+
+async def crypto_for_status_chosen(message: types.Message, state):
+    user_id = message.from_user.id
+    if message.text not in phrases.available_crypto:
+        await bot.send_message(user_id, str_phrases['pls_choose_available'])
+        return
+    await state.update_data(chosen_crypto=message.text)
+    await bot.send_message(user_id, str_phrases['input_tx_hash'], reply_markup=ReplyKeyboardRemove())
+    await CheckStatus.waiting_for_tx_hash.set()
+
+
+async def tx_hash_sent(message: types.Message, state):
+    user_id = message.from_user.id
+    state_data = await state.get_data()
+    tx_hash = message.text
+    try:
+        chosen_crypto = phrases.cryptos_abbreviations[state_data['chosen_crypto']]
+        tx_status = crypto_operations.check_chain_transaction(chosen_crypto, tx_hash)
+        msg_text = str_phrases['unconfirmed_tx']
+        if tx_status == 2:
+            msg_text = str_phrases['processing_tx']
+        if tx_status == 3:
+            msg_text = str_phrases['confirmed_tx']
+        await bot.send_message(user_id, msg_text, reply_markup=keyboards.main_kb)
+        await state.finish()
+    except BadTransaction:
+        await bot.send_message(user_id, str_phrases['invalid_tx'], reply_markup=keyboards.main_kb)
+        await state.finish()
+
+
+@dp.message_handler(commands=['news'])
+async def start_news_command(message: types.Message):
+    user_id = message.from_user.id
+    if not load_user(user_id):
+        await bot.send_message(user_id, str_phrases['u_need_account'],
+                               reply_markup=keyboards.newbie_kb)
+        return
+    session = db_session.create_session()
+    user = session.query(User).filter(User.id == user_id).first()
+    if not user.news_checked:
+        await bot.send_message(user_id, '\n'.join(list_phrases['news_intro']),
+                               reply_markup=keyboards.yes_or_no_kb)
+    else:
+        await bot.send_message(user_id, '\n'.join(list_phrases['news_reply']),
+                               reply_markup=keyboards.yes_or_no_kb)
+    await NewsSubscribe.waiting_for_choose.set()
+
+
+async def choose_news_status(message: types.Message, state):
+    user_id = message.from_user.id
+    session = db_session.create_session()
+    user = session.query(User).filter(User.id == user_id).first()
+    if message.text.lower() == 'да✔️':
+        if not user.news_checked:
+            user.news_checked = True
+            session.commit()
+            await bot.send_message(user_id, str_phrases['thanks_news'],
+                                   reply_markup=keyboards.main_kb)
+        else:
+            user.news_checked = False
+            session.commit()
+            await bot.send_message(user_id, str_phrases['sad_news'],
+                                   reply_markup=keyboards.main_kb)
+    if message.text.lower() == 'нет❌':
+        if not user.news_checked:
+            await bot.send_message(user_id, str_phrases['not_sub_news'],
+                                   reply_markup=keyboards.main_kb)
+        else:
+            await bot.send_message(user_id, str_phrases['re_sub_news'],
+                                   reply_markup=keyboards.main_kb)
+    await state.finish()
+
+
 # привязка текста к операциям
 @dp.message_handler()
-async def process_text(message):
+async def process_text(message: types.Message):
     """Делаем так, чтобы комманды были доступны с помощью клавиатуры и обычных фраз, а не только
     команд типа /команда"""
     if message.text.lower() == 'помощь':
@@ -817,6 +926,10 @@ async def process_text(message):
         await process_balance_command(message)
     if message.text.lower() == 'отправить крипто-транзакцию💸':
         await process_transaction_command(message)
+    if message.text.lower() == 'проверить статус транзакции🔖':
+        await start_status_command(message)
+    if message.text.lower() == 'рассылка новостей📰':
+        await start_news_command(message)
 
 
 # связываем функции и классы из файла states.py для ведения диалогов
@@ -876,7 +989,33 @@ def register_transaction_handlers(dispatcher):
                                         state=SendTransaction.waiting_for_wallet_to_send)
 
 
+def register_status_handlers(dispatcher):
+    dispatcher.register_message_handler(start_status_command, commands='status', state='*')
+    dispatcher.register_message_handler(crypto_for_status_chosen,
+                                        state=CheckStatus.waiting_for_crypto)
+    dispatcher.register_message_handler(tx_hash_sent, state=CheckStatus.waiting_for_tx_hash)
+
+
+def register_news_handlers(dispatcher):
+    dispatcher.register_message_handler(start_news_command, commands='status', state='*')
+    dispatcher.register_message_handler(choose_news_status,
+                                        state=NewsSubscribe.waiting_for_choose)
+
+
+async def news_sender():
+    news = News()
+    aioschedule.every().day.at("10:00").do(news.send_news, bot=bot)
+    while True:
+        await aioschedule.run_pending()
+        await asyncio.sleep(1)
+
+
+async def on_startup(_):
+    asyncio.create_task(news_sender())
+
+
 if __name__ == '__main__':
+    loop = asyncio.get_event_loop()
     register_handlers_price(dp)
     register_mail_handlers(dp)
     register_graph_handlers(dp)
@@ -884,4 +1023,6 @@ if __name__ == '__main__':
     register_bind_handlers(dp)
     register_balance_handlers(dp)
     register_transaction_handlers(dp)
-    executor.start_polling(dp)
+    register_status_handlers(dp)
+    register_news_handlers(dp)
+    executor.start_polling(dp, on_startup=on_startup)

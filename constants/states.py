@@ -43,3 +43,12 @@ class SendTransaction(StatesGroup):
     waiting_for_secret_key = State()
     waiting_for_amount = State()
     waiting_for_wallet_to_send = State()
+
+
+class CheckStatus(StatesGroup):
+    waiting_for_crypto = State()
+    waiting_for_tx_hash = State()
+
+
+class NewsSubscribe(StatesGroup):
+    waiting_for_choose = State()

@@ -1,17 +1,19 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, \
     InlineKeyboardMarkup, InlineKeyboardButton
-from phrases import available_crypto, fiats_for_buttons, available_periods
+from constants.phrases import available_crypto, fiats_for_buttons, available_periods
 
 """Account operations"""
 account_operations = KeyboardButton('Операции с аккаунтом🧾')
 create_button = KeyboardButton('Создать аккаунт👦')
 info_button = KeyboardButton('Инфо об аккаунте🗄️')
+news_button = KeyboardButton('Рассылка новостей📰')
 bind_wallet = KeyboardButton('Привязать криптовалютный кошелёк👛')
 want_generate = KeyboardButton('Хочу сгенерировать себе кошелёк🖨️')
 want_bind_own = KeyboardButton('Хочу привязать собственный📝')
 variants_kb = ReplyKeyboardMarkup(resize_keyboard=True).add(want_generate).add(want_bind_own)
-not_logged_kb = ReplyKeyboardMarkup().row(create_button)
-logged_kb = ReplyKeyboardMarkup(resize_keyboard=True).row(info_button).row(bind_wallet)
+not_logged_kb = ReplyKeyboardMarkup(resize_keyboard=True).row(create_button)
+logged_kb = ReplyKeyboardMarkup(resize_keyboard=True).row(info_button).row(bind_wallet).\
+    row(news_button)
 email_btn = KeyboardButton('Привязать почту📩')
 email_kb = ReplyKeyboardMarkup(resize_keyboard=True).add(email_btn)
 """Help command inline"""
@@ -22,9 +24,10 @@ crypto_operations = KeyboardButton('Операции с криптовалюта
 buy_button = KeyboardButton('Купить криптовалюту💳')
 balance_button = KeyboardButton('Проверить баланс кошелька💰')
 tx_button = KeyboardButton('Отправить крипто-транзакцию💸')
-payment_button = KeyboardButton('Оплачено')
+status_button = KeyboardButton('Проверить статус транзакции🔖')
+payment_button = KeyboardButton('Оплачено✔️')
 available_crypto_operations = ReplyKeyboardMarkup(resize_keyboard=True).row(buy_button).row(
-    balance_button).row(tx_button)
+    tx_button, balance_button).row(status_button)
 payment_kb = ReplyKeyboardMarkup(resize_keyboard=True).add(payment_button)
 """Price info operations"""
 price_operations = KeyboardButton('Узнать о стоимости криптовалют💱')
@@ -32,7 +35,7 @@ price_button = KeyboardButton('Курсы криптовалют сегодня�
 graph_button = KeyboardButton('График стоимости за период📈')
 price_kb = ReplyKeyboardMarkup(resize_keyboard=True).add(price_button).add(graph_button)
 """Main and newbie keyboards"""
-newbie_kb = ReplyKeyboardMarkup().row(account_operations)
+newbie_kb = ReplyKeyboardMarkup(resize_keyboard=True).row(account_operations)
 newbie_kb.row(price_operations)
 main_kb = newbie_kb
 main_kb.row(crypto_operations)

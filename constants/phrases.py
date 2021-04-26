@@ -33,7 +33,8 @@ def wallet_info(address: str, private: str, crypto_abbreviation: str):
     msg_text = [f'Адрес вашего {crypto_abbreviation}-кошелька: ' + bold(f'{address}'),
                 f'Секретный ключ: ' + bold(f'{private}'),
                 bold(
-                    'Обязательно сохраните секретный ключ ! Он не будет в базе данных, но необходим для транзакций')]
+                    'Обязательно сохраните секретный ключ ! Он не будет в базе данных, но необходим для транзакций'),
+                'Данное сообещние лучше удалить.']
     return '\n'.join(msg_text)
 
 
