@@ -388,7 +388,6 @@ async def crypto_for_balance_chosen(message: types.Message, state: aiogram.dispa
         await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'])
         return
     await state.update_data(chosen_crypto=chosen_crypto.lower())
-    print(message.from_user.id)
     wallet = is_wallet_already_bound(phrases.cryptos_abbreviations[chosen_crypto],
                                      message.from_user.id)
     await state.update_data(chosen_crypto=phrases.cryptos_abbreviations[chosen_crypto])
@@ -788,6 +787,7 @@ async def wallet_sent(message: types.Message, state):
                     f'ID транзакции: {tx_hash}']
         await bot.send_message(message.from_user.id, '\n'.join(msg_text),
                                reply_markup=keyboards.main_kb)
+        await state.finish()
     except InvalidAddress:
         await bot.send_message(user_id, str_phrases['invalid_wallet'],
                                reply_markup=keyboards.main_kb)
@@ -795,8 +795,14 @@ async def wallet_sent(message: types.Message, state):
     except AssertionError:
         await bot.send_message(user_id, str_phrases['invalid_private_key'],
                                reply_markup=keyboards.main_kb)
-    except Exception:
+        await state.finish()
+    except BadTransaction:
         await bot.send_message(user_id, str_phrases['bad_tx'], reply_markup=keyboards.main_kb)
+        await state.finish()
+    except Exception('Not ehough funds'):
+        await bot.send_message(user_id, 'На кошельке недостаточно средств',
+                               reply_markup=keyboards.main_kb)
+        await state.finish()
 
 
 @dp.message_handler(commands=['status'])
