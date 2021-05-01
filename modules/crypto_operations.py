@@ -19,6 +19,8 @@ class CryptoOperating:
             self.addresses = all_data['Wallets']
             self.private_keys = all_data['Secrets']
             self.token = all_data['Tokens']['BlockCypher']
+        with open('static/json/crypto_fees.json', encoding='utf-8') as fees:
+            self.fees = json.load(fees)
         self.doge_class = Doge()
         self.btc_class = Bitcoin()
         self.ltc_class = Litecoin()
@@ -54,13 +56,14 @@ class CryptoOperating:
         except KeyError:
             raise InvalidAddress
 
-    def send_coin(self, coin_symbol: str, private_key: str, to_public_address: str, amount: float,
-                  is_key_compressed=False):
+    def send_coin(self, coin_symbol: str, private_key: str, to_public_address: str, amount: float):
         amount_to_satoshi = int(amount * 100000000)
-        transaction = simple_spend(private_key, to_public_address, amount_to_satoshi,
-                                   coin_symbol=coin_symbol, api_key=self.token,
-                                   privkey_is_compressed=is_key_compressed)
-        return transaction
+        fee = self.fees[coin_symbol] * 100000000
+        coin_class = self.abbrev_to_their_full[coin_symbol]
+        signed_transaction = coin_class.preparesignedtx(private_key, to_public_address,
+                                                        amount_to_satoshi, fee=fee)
+        confirmed_tx = coin_class.pushtx(signed_transaction)
+        return confirmed_tx
 
     def check_chain_transaction(self, crypto_abbreviation: str, tx_hash: str):
         url = f'https://chain.so/api/v2/get_confidence/{crypto_abbreviation}/{tx_hash}'
@@ -92,8 +95,7 @@ class CryptoOperating:
         if not private_key:
             return self.send_coin(crypto_abbreviation.lower(),
                                   self.private_keys[crypto_abbreviation], address_send_to, amount)
-        return self.send_coin(crypto_abbreviation.lower(), private_key, address_send_to, amount,
-                              True)
+        return self.send_coin(crypto_abbreviation, private_key, address_send_to, amount)
 
     def get_price(self, crypto, fiat):
         price = cryptocompare.get_price(crypto, fiat)

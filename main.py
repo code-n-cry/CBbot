@@ -43,7 +43,7 @@ with open('static/json/general_bot_info.json', encoding='utf-8') as tokens:
     dogecoin_wallet = all_data['Wallets']['DOGE']
     bitly_token = all_data['Tokens']['BitLy']
 
-with open('static/json/crypto_fees.json', encoding='utf-8') as fees:
+with open('static/json/payment_fees.json', encoding='utf-8') as fees:
     all_data = json.load(fees)
     crypto_fees = all_data['Fees']
 
