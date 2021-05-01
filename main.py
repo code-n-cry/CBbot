@@ -41,6 +41,7 @@ with open('static/json/general_bot_info.json', encoding='utf-8') as tokens:
     qiwi_phone = all_data['Tokens']['Qiwi_phone']
     token = all_data['Tokens']['Tg_Token']
     dogecoin_wallet = all_data['Wallets']['DOGE']
+    bitly_token = all_data['Tokens']['BitLy']
 
 with open('static/json/crypto_fees.json', encoding='utf-8') as fees:
     all_data = json.load(fees)
@@ -307,13 +308,7 @@ async def waiting_for_bind_variant(message: types.Message, state):
     state_data = await state.get_data()
     if chosen_variant == phrases.available_variants[0]:
         # если пользователь хочет сгенерировать кошелёк себе
-        abbreviation_to_function = {
-            'BTC': crypto_operations.generate_bitcoin_wallet,
-            'LTC': crypto_operations.generate_litecoin_wallet,
-            'DOGE': crypto_operations.generate_dogecoin_wallet,
-            'ETH': crypto_operations.generate_eth_wallet
-        }
-        address, private = abbreviation_to_function[state_data['chosen_crypto']]()
+        address, private = crypto_operations.generate_wallet(state_data['chosen_crypto'])
         await types.ChatActions.typing(2)
         msg = await bot.send_message(message.from_user.id,
                                      phrases.wallet_info(address, private,
@@ -621,7 +616,7 @@ async def generating_code(message: types.message, state):
         else:
             link = qiwi_links_generator.create_bill(rub_and_cop, 0)
         headers = {
-            'Authorization': 'Bearer 77397c6ca2362f76abb2bdff47d1b6bb44c0fdff',
+            'Authorization': f'Bearer {bitly_token}',
             "Content-Type": "application/json"
         }
         json_params = {
