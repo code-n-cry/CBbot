@@ -5,6 +5,7 @@ import cryptocompare
 from cryptos import *
 from pywallet import wallet
 from constants.exceptions import InvalidAddress, BadTransaction
+# todo: сделать класс независимым от библиотеки blockcypher
 
 
 class CryptoOperating:
