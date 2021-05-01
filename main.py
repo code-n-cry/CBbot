@@ -59,11 +59,6 @@ dp = Dispatcher(bot, storage=storage)
 dp.middleware.setup(LoggingMiddleware())
 crypto_operations = CryptoOperating()
 email_operations = EmailOperations(bot_email, bot_password)
-crypto_to_their_operations = {
-    'BTC': crypto_operations.generate_bitcoin_wallet,
-    'LTC': crypto_operations.generate_litecoin_wallet,
-    'DOGE': crypto_operations.generate_dogecoin_wallet
-}
 qiwi_links_generator = PaymentOperations(qiwi_token, qiwi_phone)
 is_paying = False
 
@@ -483,7 +478,7 @@ async def fiat_chosen(message, state):
     chosen_fiat = message.text.lower()
     chosen_crypto_code = phrases.cryptos_abbreviations[chosen_crypto['chosen_crypto']]
     chosen_fiat_code = phrases.fiats_abbreviations[chosen_fiat]
-    price = round(moneywagon.get_current_price(chosen_crypto_code, chosen_fiat_code), 2)
+    price = round(crypto_operations.get_price(chosen_crypto_code, chosen_fiat_code), 2)
     fiat_to_genitive = phrases.fiats_genitive[chosen_fiat]
     reply_markup = keyboards.main_kb
     session = db_session.create_session()
