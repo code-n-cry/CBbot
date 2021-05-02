@@ -93,7 +93,7 @@ class CryptoOperating:
         else:
             coin_class = self.abbrev_to_their_full[crypto_abbreviation]
             address = coin_class.privtoaddr(private_key)
-            if amount <= self.check_crypto_wallet(crypto_abbreviation, address):
+            if amount >= float(self.check_crypto_wallet(crypto_abbreviation, address)):
                 raise BadBalance
             else:
                 return self.send_coin(crypto_abbreviation, private_key, address_send_to, amount)

@@ -783,21 +783,26 @@ async def wallet_sent(message: types.Message, state):
                                                      private_key=private_key)
         msg_text = [f'Транзакция на кошелёк {wallet} отправлена!',
                     f'ID транзакции: {tx_hash}']
+        await types.ChatActions.typing(2)
         await bot.send_message(message.from_user.id, '\n'.join(msg_text),
                                reply_markup=keyboards.main_kb)
         await state.finish()
     except InvalidAddress:
+        await types.ChatActions.typing(2)
         await bot.send_message(user_id, str_phrases['invalid_wallet'],
                                reply_markup=keyboards.main_kb)
         await state.finish()
     except AssertionError:
+        await types.ChatActions.typing(2)
         await bot.send_message(user_id, str_phrases['invalid_private_key'],
                                reply_markup=keyboards.main_kb)
         await state.finish()
     except BadTransaction:
+        await types.ChatActions.typing(2)
         await bot.send_message(user_id, str_phrases['bad_tx'], reply_markup=keyboards.main_kb)
         await state.finish()
     except BadBalance:
+        await types.ChatActions.typing(2)
         await bot.send_message(user_id, 'На кошельке недостаточно средств',
                                reply_markup=keyboards.main_kb)
         await state.finish()
