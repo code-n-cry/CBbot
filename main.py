@@ -1,7 +1,6 @@
 import json
 import os
 import logging
-import moneywagon
 import requests
 import aiogram
 import asyncio
@@ -42,15 +41,13 @@ with open('static/json/general_bot_info.json', encoding='utf-8') as tokens:
     token = all_data['Tokens']['Tg_Token']
     dogecoin_wallet = all_data['Wallets']['DOGE']
     bitly_token = all_data['Tokens']['BitLy']
+    wallets = all_data['Wallets']
+    bot_email = all_data['Email']['email']
+    bot_password = all_data['Email']['password']
 
 with open('static/json/payment_fees.json', encoding='utf-8') as fees:
     all_data = json.load(fees)
     crypto_fees = all_data['Fees']
-
-with open('static/json/general_bot_info.json', encoding='utf-8') as input_json:
-    all_data = json.load(input_json)
-    bot_email = all_data['Email']['email']
-    bot_password = all_data['Email']['password']
 
 queue = asyncio.Queue()
 bot = Bot(token=token)
@@ -64,7 +61,7 @@ is_paying = False
 
 
 # Функции для проверки статуса пользователя в системе"""
-def is_user_logged(tg_user_id: int):
+def is_user_logged(tg_user_id: int) -> bool:
     session = db_session.create_session()
     check = session.query(User).get(tg_user_id)
     if check:
@@ -72,7 +69,7 @@ def is_user_logged(tg_user_id: int):
     return False
 
 
-def load_user(user_id):
+def load_user(user_id) -> User:
     session = db_session.create_session()
     return session.query(User).get(user_id)
 
@@ -596,13 +593,14 @@ async def generating_code(message: types.message, state):
         state_data = await state.get_data()
         chosen_crypto = state_data['chosen_crypto']
         await state.update_data(chosen_amount=chosen_amount)
-        our_amount = crypto_operations.get_balance(phrases.cryptos_abbreviations[chosen_crypto])
+        chosen_crypto = phrases.cryptos_abbreviations[chosen_crypto]
+        our_amount = crypto_operations.check_crypto_wallet(chosen_crypto, wallets[chosen_crypto])
         if our_amount <= chosen_amount:
             await bot.send_message(message.from_user.id, str_phrases['so_poor'],
                                    reply_markup=keyboards.main_kb)
             await state.finish()
             return
-        rub_price = moneywagon.get_current_price(phrases.cryptos_abbreviations[chosen_crypto], 'RUB')
+        rub_price = crypto_operations.get_price(phrases.cryptos_abbreviations[chosen_crypto], 'RUB')
         rub_and_cop = round(round(rub_price, 2) * (chosen_amount + crypto_fees[chosen_crypto]), 2)
         if not rub_and_cop.is_integer():
             link = qiwi_links_generator.create_bill(int(str(rub_and_cop).split('.')[0]),
@@ -687,7 +685,7 @@ async def send_me_wallet(message: types.message, state):
                 session.delete(data)
             session.commit()
             await state.finish()
-        except Exception:
+        except BadTransaction:
             await bot.send_message(message.from_user.id, str_phrases['error_occurred'],
                                    reply_markup=keyboards.main_kb)
             await state.finish()
@@ -799,7 +797,7 @@ async def wallet_sent(message: types.Message, state):
     except BadTransaction:
         await bot.send_message(user_id, str_phrases['bad_tx'], reply_markup=keyboards.main_kb)
         await state.finish()
-    except Exception('Not ehough funds'):
+    except BadBalance:
         await bot.send_message(user_id, 'На кошельке недостаточно средств',
                                reply_markup=keyboards.main_kb)
         await state.finish()
@@ -1000,7 +998,7 @@ def register_news_handlers(dispatcher):
 
 async def news_sender():
     news = News()
-    aioschedule.every().day.at("10:00").do(news.send_news, bot=bot)
+    aioschedule.every().day.at("7:00").do(news.send_news, bot=bot)  # на европейском heroku время на 3 часа вперёд.
     while True:
         await aioschedule.run_pending()
         await asyncio.sleep(1)

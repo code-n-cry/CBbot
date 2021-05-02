@@ -12,3 +12,7 @@ class AmountError(Exception):
 
 class BadTransaction(Exception):
     pass
+
+
+class BadBalance(Exception):
+    pass
