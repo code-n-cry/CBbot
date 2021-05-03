@@ -594,13 +594,14 @@ async def generating_code(message: types.message, state):
         chosen_crypto = state_data['chosen_crypto']
         await state.update_data(chosen_amount=chosen_amount)
         chosen_crypto = phrases.cryptos_abbreviations[chosen_crypto]
-        our_amount = crypto_operations.check_crypto_wallet(chosen_crypto, wallets[chosen_crypto])
+        our_amount = float(
+            crypto_operations.check_crypto_wallet(chosen_crypto, wallets[chosen_crypto]))
         if our_amount <= chosen_amount:
             await bot.send_message(message.from_user.id, str_phrases['so_poor'],
                                    reply_markup=keyboards.main_kb)
             await state.finish()
             return
-        rub_price = crypto_operations.get_price(phrases.cryptos_abbreviations[chosen_crypto], 'RUB')
+        rub_price = crypto_operations.get_price(chosen_crypto, 'RUB')
         rub_and_cop = round(round(rub_price, 2) * (chosen_amount + crypto_fees[chosen_crypto]), 2)
         if not rub_and_cop.is_integer():
             link = qiwi_links_generator.create_bill(int(str(rub_and_cop).split('.')[0]),
@@ -620,7 +621,7 @@ async def generating_code(message: types.message, state):
         code = qiwi_links_generator.generate_payment_code()
         await state.update_data(tx_code=code)
         new_code = IsPaying(id=message.from_user.id, code=code,
-                            crypto_currency_name=phrases.cryptos_abbreviations[chosen_crypto])
+                            crypto_currency_name=chosen_crypto)
         current_user = load_user(message.from_user.id)
         current_user.payment_codes.append(new_code)
         session.merge(current_user)
@@ -1003,7 +1004,8 @@ def register_news_handlers(dispatcher):
 
 async def news_sender():
     news = News()
-    aioschedule.every().day.at("7:00").do(news.send_news, bot=bot)  # на европейском heroku время на 3 часа вперёд.
+    aioschedule.every().day.at("7:00").do(news.send_news,
+                                          bot=bot)  # на европейском heroku время на 3 часа вперёд.
     while True:
         await aioschedule.run_pending()
         await asyncio.sleep(1)

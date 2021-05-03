@@ -1,19 +1,21 @@
 from aiogram.utils.markdown import bold
 
+"""Фразы, которые нельзя описать в json-файле(с динамическими элементами)"""
 
-def start_phrase(name):
+
+def start_phrase(name) -> str:
     return '\n'.join([f'Привет, {name} 👋! ',
                       'Это CBbot(Crypto Burse bot). Он позволяет проводить какие-либо операции с криптовалютами.',
                       'Подробнее по команде "/help"'])
 
 
-def all_okay(chosen_crypto: str, link: str):
-    lst = [f'Отлично, вы можете купить это количество {cryptos_abbreviations[chosen_crypto]}.',
+def all_okay(chosen_crypto: str, link: str) -> str:
+    lst = [f'Отлично, вы можете купить это количество {chosen_crypto}.',
            f'Совершите перевод по {link} и нажмите на кнопку внизу, чтобы подтвердить перевод']
     return '\n'.join(lst)
 
 
-def price_info(crypto: str, fiat: str, price: float, fiat_code: str):
+def price_info(crypto: str, fiat: str, price: float, fiat_code: str) -> str:
     price = '{0:,}'.format(price).replace(',', ' ')
     return f'Текущий курс криптовалюты {crypto} к {fiat}: {price} {fiat_code}'
 
@@ -29,7 +31,7 @@ def account_info(btc_wal=False, ltc_wal=False, doge_wal=False, eth_wal=False):
     return '\n'.join(text)
 
 
-def wallet_info(address: str, private: str, crypto_abbreviation: str):
+def wallet_info(address: str, private: str, crypto_abbreviation: str) -> str:
     msg_text = [f'Адрес вашего {crypto_abbreviation}-кошелька: ' + bold(f'{address}'),
                 f'Секретный ключ: ' + bold(f'{private}'),
                 bold(
@@ -38,7 +40,7 @@ def wallet_info(address: str, private: str, crypto_abbreviation: str):
     return '\n'.join(msg_text)
 
 
-def wallet_already_bound(crypto_abbreviation: str):
+def wallet_already_bound(crypto_abbreviation: str) -> str:
     msg_text = [f'К вашему аккаунту уже привязан кошелёк {crypto_abbreviation}.',
                 'Вы уверены, что хотите привязать новый адрес?']
     return '\n'.join(msg_text)
