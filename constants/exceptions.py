@@ -16,3 +16,7 @@ class BadTransaction(Exception):
 
 class BadBalance(Exception):
     pass
+
+
+class EmailVerifyRequestsExpired(Exception):
+    pass

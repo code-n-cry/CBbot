@@ -44,6 +44,7 @@ with open('static/json/general_bot_info.json', encoding='utf-8') as tokens:
     wallets = all_data['Wallets']
     bot_email = all_data['Email']['email']
     bot_password = all_data['Email']['password']
+    bot_email_api_key = all_data['Email']['api_key']
 
 with open('static/json/payment_fees.json', encoding='utf-8') as fees:
     all_data = json.load(fees)
@@ -55,7 +56,7 @@ storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 dp.middleware.setup(LoggingMiddleware())
 crypto_operations = CryptoOperating()
-email_operations = EmailOperations(bot_email, bot_password)
+email_operations = EmailOperations(bot_email, bot_password, bot_email_api_key)
 qiwi_links_generator = PaymentOperations(qiwi_token, qiwi_phone)
 is_paying = False
 

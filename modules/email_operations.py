@@ -1,8 +1,8 @@
 import smtplib
 import random
+import requests
 from email.mime import multipart, text
-from validate_email import validate_email
-from constants.exceptions import EmailDoesNotExists
+from constants.exceptions import EmailDoesNotExists, EmailVerifyRequestsExpired
 from time import sleep
 
 
@@ -10,10 +10,12 @@ class EmailOperations:
     """Класс для взаимодействий с электронной почтой. В каждой функции для отправки письма произ
     водится сон в течение 2.5 секунд, чтобы уменьшить вероятность попадания в спам"""
 
-    def __init__(self, email: str, password: str):
+    def __init__(self, email: str, password: str, api_key: str):
         self.email = email
         self.password = password
         self.sender = None
+        self.verifying_url = 'https://emailvalidation.abstractapi.com/v1/'
+        self.verifying_api_key = api_key
 
     def send_authorization_message(self, email_to: str, msg_text: str):
         message = multipart.MIMEMultipart()
@@ -44,12 +46,27 @@ class EmailOperations:
         self.sender.send_message(message)
         self.sender.quit()
 
+    def validate_email(self, email: str):
+        request_params = {
+            'api_key': self.verifying_api_key,
+            'email': email
+        }
+        json_response = requests.get(self.verifying_url, params=request_params).json()
+        try:
+            if json_response['deliverability'] == 'DELIVERABLE':
+                return True
+            return False
+        except KeyError:
+            raise EmailVerifyRequestsExpired
+
     def verify_email(self, email: str, name: str):
         print(email, name)
-        print(validate_email(email))
-        if validate_email(email):
-            code = str(random.randrange(100000, 999999))
-            body = f'Доброго времени суток, {name}!\nТвой код верификации: {code}'
-            self.send_authorization_message(email, body)
-            return code
-        raise EmailDoesNotExists
+        try:
+            if self.validate_email(email):
+                code = str(random.randrange(100000, 999999))
+                body = f'Доброго времени суток, {name}!\nТвой код верификации: {code}'
+                self.send_authorization_message(email, body)
+                return code
+            raise EmailDoesNotExists
+        except EmailVerifyRequestsExpired:
+            return False
