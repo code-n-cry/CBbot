@@ -50,5 +50,13 @@ class CheckStatus(StatesGroup):
     waiting_for_tx_hash = State()
 
 
+class ChoosePriceOperation(StatesGroup):
+    waiting_for_variant = State()
+
+
+class ChooseAccountOperation(StatesGroup):
+    waiting_for_variant = State()
+
+
 class NewsSubscribe(StatesGroup):
     waiting_for_choose = State()

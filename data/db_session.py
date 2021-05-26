@@ -12,7 +12,7 @@ def initialization():
     if __factory:
         return
 
-    connection = f'postgresql://tveoirzaohoepo:a9e2e8cdbbaebebe5a5f18906c2015fc5a16389fcab2d1dda09ed6b4ecb7fe2f@ec2-54-216-185-51.eu-west-1.compute.amazonaws.com:5432/d9beeg70n64ksh'
+    connection = f'postgresql://jmbwrqtkciptar:49a7cc52b929258ba0667f13e3227601473c1245ef78dd5965ced615442a1dc0@ec2-52-214-178-113.eu-west-1.compute.amazonaws.com:5432/d3vhsjgllvb4ht'
     engine = sql.create_engine(connection, echo=False)
     __factory = orm.sessionmaker(bind=engine)
     from . import __all_models
