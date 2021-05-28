@@ -58,5 +58,9 @@ class ChooseAccountOperation(StatesGroup):
     waiting_for_variant = State()
 
 
+class ChooseCryptoOperation(StatesGroup):
+    waiting_for_variant = State()
+
+
 class NewsSubscribe(StatesGroup):
     waiting_for_choose = State()

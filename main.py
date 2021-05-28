@@ -381,12 +381,29 @@ async def wallet_for_bind_sent(message: types.Message, state):
 # операции с криптовалютами
 @dp.message_handler(commands=['crypto'])
 async def crypto_actions(message):
-    if is_user_logged(message.from_user.id):
-        await bot.send_message(message.from_user.id,
-                               'Сейчас в нашей системе доступны такие операции(на клавиатуре):',
-                               reply_markup=keyboards.available_crypto_operations)
+    if not is_user_logged(message.from_user.id):
+        await bot.send_message(message.from_user.id, str_phrases['u_need_account'])
         return
-    await bot.send_message(message.from_user.id, str_phrases['u_need_account'])
+    await bot.send_message(message.from_user.id,
+                           'Сейчас в нашей системе доступны такие операции(на клавиатуре):',
+                           reply_markup=keyboards.available_crypto_operations)
+    await ChooseCryptoOperation.waiting_for_variant.set()
+
+
+async def crypto_operation_chosen(message: types.Message, state):
+    await types.ChatActions.typing(2)
+    await state.finish()
+    if message.text.lower() == 'в главное меню↩️':
+        await bot.send_message(message.from_user.id, str_phrases['action_denied'],
+                               reply_markup=keyboards.main_kb)
+    if message.text.lower() == 'проверить баланс кошелька💰':
+        await process_balance_command(message)
+    if message.text.lower() == 'отправить крипто-транзакцию💸':
+        await process_transaction_command(message)
+    if message.text.lower() == 'проверить статус транзакции🔖':
+        await start_status_command(message)
+    if message.text.lower() == 'купить криптовалюту💳':
+        await start_buying_command(message)
 
 
 @dp.message_handler(commands=['balance', 'баланс'])
@@ -404,23 +421,28 @@ async def process_balance_command(message: types.message):
 
 async def crypto_for_balance_chosen(message: types.Message, state: aiogram.dispatcher.filters.state):
     chosen_crypto = message.text
-    if chosen_crypto not in phrases.available_crypto:
-        await types.ChatActions.typing(3)
+    await types.ChatActions.typing(2)
+    if chosen_crypto not in phrases.available_crypto and chosen_crypto != 'в главное меню↩️':
         await bot.send_message(message.from_user.id, str_phrases['pls_choose_available'])
         return
-    await state.update_data(chosen_crypto=chosen_crypto.lower())
-    wallet = is_wallet_already_bound(phrases.cryptos_abbreviations[chosen_crypto],
-                                     message.from_user.id)
-    await state.update_data(chosen_crypto=phrases.cryptos_abbreviations[chosen_crypto])
-    if wallet:
-        await state.update_data(need_wallet=wallet)
-        await bot.send_message(message.from_user.id, str_phrases['use_bounded?'],
-                               reply_markup=keyboards.yes_or_no_kb)
-        await CheckBalance.wallet_is_bound.set()
+    elif chosen_crypto == 'в главное меню↩️':
+        await bot.send_message(message.from_user.id, str_phrases['action_denied'],
+                               reply_markup=keyboards.main_kb)
+        await state.finish()
     else:
-        await bot.send_message(message.from_user.id, str_phrases['send_wallet_next'],
-                               reply_markup=ReplyKeyboardRemove())
-        await CheckBalance.wallet_not_bound.set()
+        await state.update_data(chosen_crypto=chosen_crypto.lower())
+        wallet = is_wallet_already_bound(phrases.cryptos_abbreviations[chosen_crypto],
+                                         message.from_user.id)
+        await state.update_data(chosen_crypto=phrases.cryptos_abbreviations[chosen_crypto])
+        if wallet:
+            await state.update_data(need_wallet=wallet)
+            await bot.send_message(message.from_user.id, str_phrases['use_bounded?'],
+                                   reply_markup=keyboards.yes_or_no_kb)
+            await CheckBalance.wallet_is_bound.set()
+        else:
+            await bot.send_message(message.from_user.id, str_phrases['send_wallet_next'],
+                                   reply_markup=ReplyKeyboardRemove())
+            await CheckBalance.wallet_not_bound.set()
 
 
 async def use_bounded_wallet(message: types.Message, state: aiogram.dispatcher.filters.state):
@@ -816,13 +838,19 @@ async def process_transaction_command(message: types.Message):
 async def crypto_for_transaction_chosen(message: types.Message, state):
     chosen_crypto = message.text
     user_id = message.from_user.id
-    if chosen_crypto not in phrases.available_crypto[:-1]:
+    if chosen_crypto not in phrases.available_crypto[:-1] \
+            and message.text.lower() != 'в главное меню↩️':
         await bot.send_message(user_id, str_phrases['choose_available'])
         return
-    await state.update_data(chosen_crypto=phrases.cryptos_abbreviations[chosen_crypto])
-    await bot.send_message(user_id, str_phrases['send_secret_key_next'],
-                           reply_markup=ReplyKeyboardRemove())
-    await SendTransaction.waiting_for_secret_key.set()
+    elif message.text.lower() == 'в главное меню↩️':
+        await bot.send_message(message.from_user.id, str_phrases['action_denied'],
+                               reply_markup=keyboards.main_kb)
+        await state.finish()
+    else:
+        await state.update_data(chosen_crypto=phrases.cryptos_abbreviations[chosen_crypto])
+        await bot.send_message(user_id, str_phrases['send_secret_key_next'],
+                               reply_markup=ReplyKeyboardRemove())
+        await SendTransaction.waiting_for_secret_key.set()
 
 
 async def private_key_sent(message: types.Message, state):
@@ -952,6 +980,8 @@ async def choose_news_status(message: types.Message, state):
     user_id = message.from_user.id
     session = db_session.create_session()
     user = session.query(User).filter(User.id == user_id).first()
+    await state.finish()
+    await types.ChatActions.typing(2)
     if message.text.lower() == 'да✔️':
         if not user.news_checked:
             user.news_checked = True
@@ -973,7 +1003,6 @@ async def choose_news_status(message: types.Message, state):
     if message.text.lower() == 'в главное меню↩️':
         await bot.send_message(message.from_user.id, str_phrases['action_denied'],
                                reply_markup=keyboards.main_kb)
-    await state.finish()
 
 
 # привязка текста к операциям
@@ -983,24 +1012,14 @@ async def process_text(message: types.Message):
     команд типа /команда"""
     if message.text.lower() == 'помощь':
         await process_help_command(message)
+    if message.text.lower() == 'операции с криптовалютами💲':
+        await crypto_actions(message)
+    if message.text.lower() == 'операции с аккаунтом🧾':
+        await account_operations(message)
     if message.text.lower() == 'узнать о стоимости криптовалют💱':
         await price_operations(message)
     if message.text.lower() == 'привязать почту📩':
         await start_email_command(message)
-    if message.text.lower() == 'график стоимости📈':
-        await start_graph_command(message)
-    if message.text.lower() == 'купить криптовалюту💳':
-        await start_buying_command(message)
-    if message.text.lower() == 'операции с криптовалютами💲':
-        await crypto_actions(message)
-    if message.text.lower() == 'проверить баланс кошелька💰':
-        await process_balance_command(message)
-    if message.text.lower() == 'отправить крипто-транзакцию💸':
-        await process_transaction_command(message)
-    if message.text.lower() == 'проверить статус транзакции🔖':
-        await start_status_command(message)
-    if message.text.lower() == 'операции с аккаунтом🧾':
-        await account_operations(message)
 
 
 # связываем функции и классы из файла states.py для ведения диалогов
@@ -1012,7 +1031,14 @@ def register_price_operations_handlers(dispatcher):
 
 def register_account_operations_handlers(dispatcher):
     dispatcher.register_message_handler(account_operations, commands='account_operations', state='*')
-    dispatcher.register_message_handler(account_operation_chosen, state=ChooseAccountOperation.waiting_for_variant)
+    dispatcher.register_message_handler(account_operation_chosen,
+                                        state=ChooseAccountOperation.waiting_for_variant)
+
+
+def register_crypto_operations_handlers(dispatcher):
+    dispatcher.register_message_handler(crypto_actions, commands='crypto_operations', state='*')
+    dispatcher.register_message_handler(crypto_operation_chosen,
+                                        state=ChooseCryptoOperation.waiting_for_variant)
 
 
 def register_handlers_price(dispatcher):
@@ -1100,6 +1126,7 @@ if __name__ == '__main__':
     register_mail_handlers(dp)
     register_graph_handlers(dp)
     register_buy_handlers(dp)
+    register_crypto_operations_handlers(dp)
     register_bind_handlers(dp)
     register_balance_handlers(dp)
     register_transaction_handlers(dp)
