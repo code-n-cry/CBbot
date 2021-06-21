@@ -99,6 +99,7 @@ class CryptoOperating:
                 return self.send_coin(crypto_abbreviation, private_key, address_send_to, amount)
 
     def get_price(self, crypto, fiat) -> float:
+        print(crypto, fiat)
         price = cryptocompare.get_price(crypto, fiat)
         digit_price = price[crypto][fiat]
         return digit_price
