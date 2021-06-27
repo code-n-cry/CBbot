@@ -10,3 +10,6 @@ Buying and solding implemented with our own bank of crypto and fiat currencies. 
 Bot is on the hosting now, u can check is it working in any time u want
 Our langing page: https://agitated-mestorf-147a34.netlify.app/
 Bot: https://t.me/CryptoBurseBot
+
+
+<b>ALL STABLE CURRENT CODE IN THE STABLE BRANCH</b>
