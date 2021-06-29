@@ -698,7 +698,7 @@ async def generating_code(message: types.message, state):
         chosen_crypto = phrases.cryptos_abbreviations[chosen_crypto]
         our_amount = float(
             crypto_operations.check_crypto_wallet(chosen_crypto, wallets[chosen_crypto]))
-        if our_amount <= chosen_amount:
+        if our_amount <= chosen_amount + crypto_fees[chosen_crypto]:
             await bot.send_message(message.from_user.id, str_phrases['so_poor'],
                                    reply_markup=keyboards.main_kb)
             await state.finish()
